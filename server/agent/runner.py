@@ -151,7 +151,12 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
                     return finish("limit_reached", "validation limit")
                 calls += 1
                 emit("tool_call", f"Called {call.name}", tool=call.name, args=_short(call.arguments))
-                out: ToolOutput = registry.call(call.name, call.arguments)
+                try:
+                    out: ToolOutput = registry.call(call.name, call.arguments)
+                except Exception as exc:  # a tool must never kill the run; the model sees the error
+                    out = ToolOutput({"error": {"type": "tool_crash",
+                                                "message": f"{type(exc).__name__}: {exc}"}},
+                                     f"Tool {call.name} crashed: {type(exc).__name__}", ok=False)
                 emit("tool_result", out.summary, tool=call.name, ok=out.ok)
                 results.append(ToolResult(call.id, call.name, json.dumps(out.data, ensure_ascii=False)))
                 if out.terminal:

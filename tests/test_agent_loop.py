@@ -227,3 +227,17 @@ def test_tool_schemas_are_plain_json_schema_objects():
         blob = json.dumps(spec.parameters)
         assert spec.parameters["type"] == "object"
         assert '"title"' not in blob and "anyOf" not in blob and "$defs" not in blob
+
+
+def test_crashing_tool_returns_an_error_and_the_run_continues(monkeypatch):
+    ctx = make_ctx(solo())
+
+    def boom(*, category, query, limit):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(ctx.places, "search", boom)
+    p = ScriptedProvider([tc("search_places", category="food"), tc("ask_user", question="ok?")])
+    res = run_agent(provider=p, ctx=ctx, request="x")
+    err = results_of(p, "search_places")[0]["error"]
+    assert err["type"] == "tool_crash" and "ValueError" in err["message"]
+    assert res.status == "needs_clarification"  # the run survived the crash

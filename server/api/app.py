@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from server.agent.config import load_dotenv, provider_from_env
@@ -83,7 +84,7 @@ def result_json(res: RunResult, ctx: ToolContext) -> dict[str, Any]:
         blocks = []
         for b in plan.blocks:
             p = ctx.details.get(b.place_id)
-            blocks.append({"id": b.id, "name": b.name, "start": f"{local(b.start, tz):%H:%M}",
+            blocks.append({"id": b.id, "place_id": b.place_id, "name": b.name, "start": f"{local(b.start, tz):%H:%M}",
                            "end": f"{local(b.end, tz):%H:%M}", "lat": p.lat if p else None,
                            "lon": p.lon if p else None, "cost": _cost_text(b.costs), "shortened": b.shortened})
         legs = [{"from": l.from_id, "to": l.to_id, "mode": l.mode, "depart": f"{local(l.depart, tz):%H:%M}",
@@ -170,6 +171,9 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
+
+    app.mount("/fixtures", StaticFiles(directory=Path(__file__).resolve().parents[2] / "fixtures"),
+              name="fixtures")
 
     return app
 

@@ -7,7 +7,7 @@ Status key: done / partial / not started. Work packages follow the brief (sectio
 | 1 | Repository and contracts | **partial** | Pydantic contracts for trip, member, constraint, place, plan, evidence, validation, forecast (`server/models/`). Python deps pinned by `uv.lock`. **Not done:** frontend, FastAPI app, DB migrations, generated frontend types. |
 | 2 | Scheduling and validators | **done for the checks below** | `server/planning/`: money allocation, bounded-search assembly, validators. 25 tests. |
 | 3 | Provider tools | not started | No provider adapters, no live access verified. |
-| 4 | Agent planning | not started | No model connected; no API key in this environment. |
+| 4 | Agent planning | **partial** | Provider-neutral model interface, Gemini adapter (Interactions API), scripted test model, `.env` config, live smoke test (`uv run python -m server.agent.smoke`). **Not done:** the agent loop and tools. Gemini adapter is tested only against a mock of the documented API shape; it has not been run against the live service. |
 | 5 | Solo user journey | not started | |
 | 6 | Revision workflow | not started | Diffing, stable-ID diff view, transactional acceptance not written. |
 | 7 | Group journey | not started | Parallel/split activities not supported by `assemble_plan` yet. |
@@ -49,6 +49,7 @@ edits and stale proposals, 9 forecast horizon via a real provider, 10 provider t
 
 | Integration | Status |
 |---|---|
-| Model / agent | not implemented (no API key available) |
+| Model adapter (Gemini) | implemented, **not verified live** (no key in this environment); run the smoke test with a key |
+| Agent loop | not implemented |
 | Places, routes, weather, events, stays, intercity | not implemented |
 | Supabase auth / realtime / Postgres | not implemented (no Postgres or Docker installed) |

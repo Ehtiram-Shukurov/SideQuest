@@ -8,6 +8,7 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "tzdata",
+  "httpx",
 ]
 
 [dependency-groups]

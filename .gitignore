@@ -19,3 +19,6 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# local data (SQLite database for group trips)
+data/

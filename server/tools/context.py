@@ -39,4 +39,5 @@ class ToolContext:
     clarification: dict[str, Any] | None = None
     last_conflict: dict[str, Any] | None = None
     validations_run: int = 0
+    private_mode: bool = False  # group trips: redact per-person budget/access details from tool output
     excluded: set[str] = field(default_factory=set)  # place ids the user removed or swapped out

@@ -69,7 +69,7 @@ def load_skills(names=DEFAULT_SKILLS, directory: Path = SKILLS_DIR) -> str:
     return "\n\n".join(parts)
 
 
-def trip_snapshot(trip: Trip) -> dict[str, Any]:
+def _solo_snapshot(trip: Trip) -> dict[str, Any]:
     tz = trip.timezone
 
     def rng(ws):
@@ -97,6 +97,44 @@ def trip_snapshot(trip: Trip) -> dict[str, Any]:
         "origin": {"id": trip.origin.id, "name": trip.origin.name},
         "endpoint": {"id": trip.endpoint.id, "name": trip.endpoint.name},
         "budget_includes": list(trip.budget_includes), "members": members, "known_gaps": gaps}
+
+
+def _budget_band(caps: list[int]) -> str:
+    if not caps:
+        return "none stated"
+    lo = min(caps)
+    return ("very tight (under $15)" if lo < 1500 else "tight ($15-30)" if lo < 3000
+            else "moderate ($30-60)" if lo < 6000 else "relaxed ($60+)")
+
+
+def trip_snapshot(trip: Trip, group: bool = False) -> dict[str, Any]:
+    """What the model is told about the trip. In group mode only PUBLIC member fields (name, shared
+    window, transport, interests) appear per member. Budgets, access needs and dietary needs reach
+    the model only as unattributed aggregates; code (the validator) enforces the per-person values."""
+    if not group:
+        return _solo_snapshot(trip)
+    tz = trip.timezone
+    people = trip.travellers()
+    caps = [m.budget_cap_minor for m in people if m.budget_cap_minor is not None and not m.budget_uncapped]
+    gaps = [f"{m.id}: transport modes" for m in people if m.transport_modes is None]
+    if any(m.budget_cap_minor is None and not m.budget_uncapped for m in people):
+        gaps.append("a budget cap is missing for at least one traveller")
+    return {
+        "trip_id": trip.id, "title": trip.title, "mode": "group", "timezone": tz, "currency": trip.currency,
+        "window": f"{local(trip.window_start, tz):%Y-%m-%d %H:%M} to {local(trip.window_end, tz):%Y-%m-%d %H:%M}",
+        "origin": {"id": trip.origin.id, "name": trip.origin.name},
+        "endpoint": {"id": trip.endpoint.id, "name": trip.endpoint.name},
+        "members": [{"id": m.id, "name": m.display_name,
+                     "transport_modes": "unknown" if m.transport_modes is None else list(m.transport_modes),
+                     "interests": list(m.interests)} for m in people],
+        "group_notes": {
+            "travelling_together": True,
+            "budget_pressure": _budget_band(caps),
+            "someone_needs_step_free_access": any(m.requires_step_free for m in people),
+            "dietary_needs": sorted({d for m in people for d in m.dietary}),
+            "strictest_rain_limit_pct": (round(min(m.avoid_rain_above for m in people if m.avoid_rain_above is not None) * 100)
+                                         if any(m.avoid_rain_above is not None for m in people) else None)},
+        "known_gaps": gaps}
 
 
 def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
@@ -136,7 +174,7 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
             turn = session.send(tool_results=tool_results)
         else:
             first = opening if opening is not None else json.dumps(
-                {"request": request, "trip": trip_snapshot(ctx.trip)}, ensure_ascii=False)
+                {"request": request, "trip": trip_snapshot(ctx.trip, group=ctx.private_mode)}, ensure_ascii=False)
             turn = session.send(user=first)
         add_usage(turn.usage)
         for _ in range(limits.max_turns):

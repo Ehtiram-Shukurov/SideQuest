@@ -246,6 +246,13 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
             "per_person_cost_minor": {k: {"low": v.low_minor, "high": v.high_minor,
                                           "cap": v.cap_minor, "has_unknown": v.has_unknown}
                                       for k, v in report.per_person_totals.items()}}
+        if ctx.private_mode:  # group trips: no per-person budget or access details, no attribution
+            private = {"BUDGET_PER_PERSON": "A traveller's budget is not satisfied or not known (details are private).",
+                       "ACCESSIBILITY": "A traveller's access requirement is not satisfied or not confirmed (details are private)."}
+            for it in data["issues"]:
+                if it["code"] in private:
+                    it["message"], it["participants"], it["data"] = private[it["code"]], [], {}
+            data["per_person_cost_minor"] = {"redacted": True}
         if not ctx.forecast_retrieved:
             data["note"] = "Forecast not retrieved: weather-limited stops are unknown."
         return ToolOutput(data, f"Validated {a.plan_id}: {overall} ({counts['fail']} failed, {counts['unknown']} unknown)")

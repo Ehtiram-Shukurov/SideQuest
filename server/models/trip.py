@@ -59,6 +59,8 @@ class Member(Frozen):
     car_capacity: int | None = Field(default=None, ge=1)
     requires_step_free: bool | None = None
     avoid_rain_above: float | None = Field(default=None, ge=0, le=1)  # precip probability
+    interests: tuple[str, ...] = ()  # group trips: shared with the group
+    dietary: tuple[str, ...] = ()  # group trips: private; only an unattributed union reaches the model
 
     @model_validator(mode="after")
     def _car(self) -> Member:

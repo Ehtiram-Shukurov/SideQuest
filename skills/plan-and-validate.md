@@ -45,3 +45,11 @@ validation and time limits.
   fixed and `assemble_plan` keeps them automatically; do not move or drop them. Never use ids in
   `excluded_place_ids` (tools reject them). Keep the other current stops unless the change forces
   otherwise, reuse earlier research where you can, and change as little as possible.
+
+## Group trips
+- The trip snapshot has `mode: group`. Everyone travels together in one shared window; splitting
+  the group is not supported, so never plan separate activities.
+- Budgets, access needs and dietary needs arrive only as unattributed notes (`group_notes`).
+  Validation issues about them are redacted. Never attribute a budget, access or dietary need to a
+  named person, and never state amounts, in your explanation. Say "the group" instead.
+- Use `interests` to pick stops several people would enjoy, and mention which interests a stop serves.

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import threading
 import uuid
 from collections.abc import Callable
@@ -31,6 +32,8 @@ from pydantic import BaseModel, Field
 from server.agent.config import load_dotenv, provider_from_env
 from server.agent.model import ModelError, ModelProvider, ToolResult
 from server.agent.runner import RunLimits, run_agent, trip_snapshot
+from server.groups.routes import register_groups
+from server.groups.store import Store
 from server.models import Location, Member, TimeWindow, Trip, local
 from server.planning.changes import (
     diff_plans,
@@ -260,12 +263,15 @@ def _block_view(sess: TripSession) -> list[dict[str, Any]]:
 
 
 def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env,
-               now_fn: Callable[[], datetime] = lambda: datetime.now(UTC)) -> FastAPI:
+               now_fn: Callable[[], datetime] = lambda: datetime.now(UTC),
+               db_path: str = ":memory:") -> FastAPI:
     load_dotenv()
     app = FastAPI(title="SideQuest MVP")
     runs: dict[str, Run] = {}
     sessions: dict[str, TripSession] = {}
-    busy = threading.Lock()  # one agent run at a time
+    busy = threading.Lock()  # one agent run at a time (solo and group share it)
+    register_groups(app, store=Store(db_path), provider_factory=provider_factory, now_fn=now_fn, busy=busy,
+                    limits=LIMITS, proposal_json=proposal_json)
 
     def get_session(trip_id: str) -> TripSession:
         sess = sessions.get(trip_id)
@@ -506,4 +512,4 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
     return app
 
 
-app = create_app()
+app = create_app(db_path=os.environ.get("SIDEQUEST_DB", "data/sidequest.db"))

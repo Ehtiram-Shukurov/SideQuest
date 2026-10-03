@@ -22,7 +22,7 @@ For longer travel, distinguish destination discovery, intercity transport, lodgi
 
 ### Generate a plan
 
-Research candidates, retrieve required details, estimate routes, construct candidate schedules, and validate. Return a timeline, map, budget breakdown, source details, and unresolved information. Offer meaningful alternatives when the user's priorities conflict. A single-stop plan is valid for a short time window; do not force several activities into every outing.
+Research candidates, retrieve required details, estimate routes, construct candidate schedules, and validate. Return a timeline, map, budget breakdown, source details, and unresolved information. Offer meaningful alternatives when the user's priorities conflict. A single-stop plan is valid for a short time window; do not force several activities into every outing. A quick single-stop outing is chosen with the scoring and confidence threshold in section 8; if nothing clears the threshold, offer a labeled fallback quest rather than a weak match.
 
 ### Refine and follow
 
@@ -83,14 +83,14 @@ Store model/provider credentials server-side. Invite links use revocable tokens 
 3. Plan research: determine which categories, geographical areas, and provider calls are needed.
 4. Retrieve candidates with source IDs and provenance.
 5. Fetch detail for promising candidates; deduplicate the same venue across sources.
-6. Prune clear violations and compute appropriate route estimates for remaining candidates.
+6. Prune clear violations, compute appropriate route estimates for remaining candidates, then score the survivors and keep a bounded shortlist (see Candidate scoring and selection in section 8).
 7. Construct candidate schedules in code using selected activities, time windows, route durations, and locked stops.
 8. Validate each candidate and return machine-readable failures or unknowns.
 9. The agent chooses a repair: search another venue, shorten an optional stop, reorder, change a route, or ask about relaxing a constraint.
 10. Repeat within configurable iteration, time, and cost limits.
 11. Return a proposed plan, alternatives where useful, evidence, and a validation summary.
 
-The model interprets preferences, chooses searches, interprets ambiguous source text, and explains tradeoffs. Code calculates costs, tracks attendance, constructs and validates schedules, and controls versions. Explanations cite actual tool outputs and validation results. Do not invent an internal monologue for the activity feed.
+The model interprets preferences, chooses searches, interprets ambiguous source text, and explains tradeoffs. Code calculates costs, scores candidates and applies selection thresholds, tracks attendance, constructs and validates schedules, and controls versions. The model may pick among shortlisted candidates and write the quest copy, but it cannot add a candidate; its pick is checked against the shortlist IDs. Explanations cite actual tool outputs and validation results. Do not invent an internal monologue for the activity feed.
 
 On failure, return a concrete conflict such as: required travel and activities need 110 minutes but the available window is 90 minutes. Offer explicit relaxations; never silently violate the user's hard constraint.
 
@@ -124,6 +124,57 @@ Hard constraints are filters and validation gates, not small score penalties. Am
 Validate: travel continuity, sufficient travel time, full visit within confirmed opening windows, last admission, reservation window, no participant double-booking, participant availability, travel mode/car capacity, budget allocations, weather-related user restrictions, and final arrival at the correct endpoint. Account for meal/rest periods and lodging on longer plans.
 
 Use conservative bounds when possible. If the estimated cost range crosses a strict cap, mark the budget check uncertain instead of choosing the lower bound to pass. Likewise, predicted travel times and weather are estimates even when schedule arithmetic passes.
+
+### Candidate scoring and selection
+
+Selection is deterministic, explainable, and easy to tune. Code decides which candidate wins; the model may only phrase it. All weights, bands, and thresholds below live in one versioned scoring config, and every run records the config version.
+
+Lifecycle: fetch candidates within a mobility-aware radius; apply hard filters; score the survivors; select the top candidate if it clears the confidence threshold; otherwise serve a fallback quest.
+
+**Search radius.** `travel_time_budget_min` is the total round-trip travel budget. Use the explicit value if supplied, otherwise `min(0.35 * time_available_min, 25)`. Then `radius_km = speed_kmh * (travel_time_budget_min / 2 / 60)`, clamped per mode.
+
+| Mode | Planning speed | Max radius |
+| --- | --- | --- |
+| walk | 4.5 km/h | 2.0 km |
+| bike | 15 km/h | 6.0 km |
+| car | 30 km/h effective city speed | 15.0 km |
+
+These speeds only bound the candidate fetch and give first estimates. Replace them with provider route estimates (section 12) before a final decision; never use a driving estimate for a walking leg.
+
+**Hard filters.** Drop a candidate, and record a machine-readable reason, if any of these hold:
+
+- estimated round-trip travel exceeds the travel budget;
+- the place is confirmed closed at any point in the visit window (arrival to departure);
+- the category conflicts with the weather (`park`, `trail`, `viewpoint` in heavy rain; use the forecast probability threshold from config and probabilistic wording in copy);
+- the place was shown within the recent-history window (a config value);
+- the place is marked unsafe for the current context (provider flag, time-of-day rule, or user report);
+- minimum dwell time plus round-trip travel exceeds the time available.
+
+Unknown opening hours are not proof of "open" and are not proof of "closed". Keep such a candidate, mark it provisional, and make sure no copy says the place is open (section 4).
+
+**Score components.** The total is 0 to 100.
+
+| Component | Range | Rule |
+| --- | --- | --- |
+| Interest match | 0-40 | Exact category/tag overlap with user interests up to 30; adjacent thematic match up to 10, from a maintained adjacency map. Example: `books` + `bookstore` scores 30-40; `art` + `historic building` scores 10-20. |
+| Time fit | 0-25 | `usage_ratio = estimated_total_min / time_available_min`. 25 if 0.65-0.95; 18 if above 0.95 up to 1.0, or 0.45 up to 0.65; 10 if 0.30 up to 0.45; otherwise 0. Bands are half-open so none leave gaps. |
+| Distance fit | 0-20 | Round-trip travel as a share of the travel budget: 20 if at most 40%; 15 if at most 70%; 8 if at most 100%. |
+| Novelty | 0-10 | 10 if the place and category are new; 5 if the category was seen but the place is new; 0 if the place was seen before (outside the filter window). |
+| Context fit | 0-5 | +2 weather aligns; +1 time of day; +1 budget (only when the price is known and within the cap; unknown price scores 0); +1 party type. |
+
+If the user supplied no interests, use a neutral interest score of 20 and skip the interest threshold below, so that "no preferences" does not always force a fallback.
+
+**Confidence and selection.** Use the top candidate only when the total is at least 60, the interest score is at least 15, and the time-fit score is at least 10. Otherwise take the fallback path. A provisional candidate can win, but the result stays flagged as provisional.
+
+**Tie-breaking.** When totals are equal, prefer: higher interest score; confirmed over unknown hours (added to keep ties from favoring unverified data); lower round-trip travel time; higher novelty; then place ID in alphabetical order, so the result is identical on every run.
+
+**Fallback quests.** Fallbacks are curated non-place or indoor generic quests, tagged and filtered by context: match at least one user interest where possible, fit the available time, prefer indoor quests in poor weather, and avoid recently shown templates. A fallback never names a real place and needs no model call. Tell the user plainly that nothing nearby scored well enough.
+
+**Debug and explanation output.** Every run returns the filter reason for each rejected candidate, the per-candidate score breakdown, the scoring config version, the threshold path (`place` or `fallback`), and the provisional flag. Store this on the AgentRun/ToolEvent record. User-facing explanations quote this breakdown ("matches your interest in books; uses about 70% of your hour") rather than model-written reasoning. Keep the full breakdown in an expandable view, not the main experience.
+
+**Personalization (later).** Turn explicit feedback into bounded interest and distance weights: completing a `books` quest raises `books` by about 0.15; skipping for `too_far` penalizes the distance feature; skipping for `not_interesting` penalizes that category. Store weights as inferred Preference records with a last-confirmed time and an opt-in state. Feedback adjusts scores only; it never relaxes a hard constraint or overrides an explicit trip constraint.
+
+**Open decisions.** Confirm before building: the recent-history window length; who maintains the adjacency map; whether the thresholds hold up in user testing; and whether to keep the round-trip definition of the travel budget.
 
 ## 9. Replanning and version control
 
@@ -165,7 +216,7 @@ Use adapters with capability flags for supported regions, transport modes, forec
 - Events: connect documented event sources and retain the actual event date and source. A venue listing is not evidence of an event.
 - Lodging/intercity travel: use authorized provider access with dated quotes and explicit availability; if access is unavailable, accept user-entered reservations and mark unverified recommendations appropriately.
 
-Cache only as permitted. Weather, route, price, and place data have different freshness needs. Associate each field with its own provenance instead of claiming an entire card was verified because one field was retrieved. Bound retries, provider requests, and candidate counts; prioritize detail calls for promising candidates.
+Planning speeds in section 8 only bound the first candidate fetch; replace them with provider route estimates for the mode before deciding. Cache only as permitted. Weather, route, price, and place data have different freshness needs. Associate each field with its own provenance instead of claiming an entire card was verified because one field was retrieved. Bound retries, provider requests, and candidate counts; prioritize detail calls for promising candidates.
 
 ## 13. Data model
 
@@ -184,7 +235,8 @@ Cache only as permitted. Weather, route, price, and place data have different fr
 | Suggestion | author, place/text, status, comments |
 | Proposal/Vote | base versions, diff, policy, voter responses |
 | AgentRun/ToolEvent | model, prompt/tool versions, inputs hash, status, latency, tool evidence |
-| Preference | user, explicit/inferred source, weight, last confirmed, opt-in state |
+| Preference | user, explicit/inferred source, weight (interest, distance), last confirmed, opt-in state |
+| Impression | user, place or fallback template ID, shown_at, outcome (accepted, skipped, completed), skip reason, scoring config version |
 
 Keep accepted snapshots immutable. A restoration creates a new version with current checks; it does not rewrite history. Store private constraints separately or restrict their access with appropriate database policies; field visibility cannot be secured solely by hiding it in the UI.
 
@@ -217,14 +269,14 @@ Avoid a separate framework or agent for each skill. Keep deterministic functions
 ## 16. Implementation sequence and ownership
 
 1. Define shared contracts and example scenarios. Agree on constraint semantics, source states, accepted/proposed versions, and budget allocation.
-2. Implement validators and sample datasets. Establish expected outcomes before involving the model.
+2. Implement validators, candidate scoring with golden score-breakdown tests, and sample datasets. Establish expected outcomes before involving the model.
 3. Build provider adapters with recorded response fixtures and real access checks.
 4. Implement the planner agent against these tools with bounded repair loops.
 5. Connect the solo creation-to-plan UI and progress stream.
 6. Implement replan patches, stable block IDs, diffs, and transactional acceptance.
 7. Add member profiles, invitations, suggestions, votes, realtime sync, and privacy rules using the same engine.
 8. Add hierarchical multi-day planning, lodging/transport dependencies, and forecast-horizon behavior.
-9. Connect check-ins, user-authorized updates, and preference controls.
+9. Connect check-ins, user-authorized updates, and preference controls, including feedback-driven weights.
 10. Evaluate, rehearse the demonstration, document, and submit according to the current organizer instructions.
 
 Ownership: product/interface owner handles screens and interactions; agent/backend owner handles orchestration and APIs; data/planning owner handles adapters and deterministic checks; collaboration owner handles membership and versions; quality/submission owner maintains examples, evaluation, setup, and demo. Combine roles according to team size. Integrate through agreed contracts rather than independent incompatible prototypes.
@@ -246,8 +298,13 @@ Ownership: product/interface owner handles screens and interactions; agent/backe
 | Long trip beyond forecast horizon | Reports forecast unavailable |
 | Provider outage | Uses labeled permitted cached data or reports missing evidence |
 | No feasible plan | Explains actual conflicting constraints and asks for a choice |
+| Best candidate misses the confidence threshold | Serves a labeled fallback quest, not a weak place match |
+| Two candidates tie | Resolves by the documented tie-break order, identically on every run |
+| Place shown recently | Excluded by a hard filter; the reason appears in debug output |
+| Unknown opening hours | Stays eligible but provisional; no copy says the place is open |
+| No interests supplied | Uses the neutral interest score; does not force a fallback |
 
-Measure hard-constraint violations on checked cases, unknown-data rate, source coverage, per-person preference coverage, unnecessary changed blocks during replan, latency, provider/model costs, and successful user acceptance. Evaluate hard checks in code; use human review for preference fit and explanation quality. Keep a fixed set of held-out scenarios instead of testing only the polished demo.
+Measure hard-constraint violations on checked cases, fallback rate, threshold-path rate, score distribution by component, skip reasons, unknown-data rate, source coverage, per-person preference coverage, unnecessary changed blocks during replan, latency, provider/model costs, and successful user acceptance. Evaluate hard checks in code; use human review for preference fit and explanation quality. Keep a fixed set of held-out scenarios instead of testing only the polished demo.
 
 Validate authorization and state consistency as well as itinerary quality. Test private constraint leakage, stale acceptance, duplicate submissions, removed-member access, and reconnection behavior because they can affect real group data.
 
@@ -261,7 +318,7 @@ Three execution modes:
 - Recorded-data agent run: actual model with fixed provider responses; repeatable inputs, not guaranteed identical text.
 - Replay: previously saved events and plan; deterministic offline presentation, explicitly not a new agent run.
 
-Record dependency versions, prompt/tool versions, timestamps, timezone, fixture provenance, and model configuration. Include validator expected outcomes, clean setup instructions, and a sample environment file without secrets. Verify the clean setup and all advertised modes before claiming reproducibility.
+Record dependency versions, prompt/tool versions, scoring config version, timestamps, timezone, fixture provenance, and model configuration. Include validator expected outcomes, clean setup instructions, and a sample environment file without secrets. Verify the clean setup and all advertised modes before claiming reproducibility.
 
 For the hackathon, the supplied brief specifies team eligibility, registration, GitHub submission, and a five-minute finalist demonstration. Read the current organizer repository instructions before submitting; those additional instructions have not been retrieved in this conversation. Do not claim skills files or a polished demo guarantee finalist selection.
 

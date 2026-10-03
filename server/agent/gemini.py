@@ -14,6 +14,8 @@ from typing import Any
 
 import httpx
 
+from server.http import make_client
+
 from .model import (
     ModelError,
     ModelRateLimited,
@@ -37,7 +39,7 @@ class GeminiProvider:
             raise ModelError("GEMINI_API_KEY is not set")
         self._key = api_key
         self.model = model
-        self._client = client or httpx.Client(timeout=timeout_s)
+        self._client = client or make_client(timeout=timeout_s)
         self._base = base_url.rstrip("/")
         self._max_retries = max_retries
         self._backoff = backoff_s

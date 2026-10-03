@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from server.http import make_client
 from server.models import Cost, Evidence, Place, TimeWindow
 from server.models.weather import ForecastPeriod
 from server.planning.assemble import LegEstimate
@@ -108,7 +109,7 @@ class LiveWorld:
         self._lat, self._lon, self._tz, self._origin_id = lat, lon, ZoneInfo(tz), origin_id
         self._now = now.astimezone(UTC)
         self._radius = radius_m
-        self._client = client or httpx.Client(timeout=25.0, headers={"User-Agent": USER_AGENT})
+        self._client = client or make_client(timeout=25.0, headers={"User-Agent": USER_AGENT})
         self._elements: dict[str, dict] | None = None
         self._points: dict[str, tuple[float, float]] = {origin_id: (lat, lon)}
 
@@ -130,8 +131,12 @@ class LiveWorld:
             raise ProviderError("rate_limited", f"Overpass busy ({resp.status_code}); try again shortly")
         if resp.status_code != 200:
             raise ProviderError("unavailable", f"Overpass returned {resp.status_code}")
+        try:
+            body = resp.json()
+        except ValueError:
+            raise ProviderError("unavailable", "Overpass returned an unreadable response") from None
         els: dict[str, dict] = {}
-        for e in resp.json().get("elements", []):
+        for e in body.get("elements", []):
             lat = e.get("lat") or (e.get("center") or {}).get("lat")
             lon = e.get("lon") or (e.get("center") or {}).get("lon")
             if lat is None or lon is None:
@@ -192,7 +197,7 @@ class LiveWorld:
                     ev("step_free", wc, step_free is not None, f"ev-{place_id}-access"))
         place = Place(id=place_id, name=tags.get("name", place_id), lat=e["lat"], lon=e["lon"],
                       timezone=str(self._tz), categories=(cat, value), opening_windows=windows, price=price,
-                      min_visit_minutes=minimum, typical_visit_minutes=typical, optional_shrink=cat == "food" and False,
+                      min_visit_minutes=minimum, typical_visit_minutes=typical, optional_shrink=(cat == "food"),
                       step_free=step_free, outdoor=outdoor, evidence_ids=tuple(x.id for x in evidence))
         return PlaceDetails(place, evidence, (tags.get("description") or "")[:200])
 
@@ -223,7 +228,10 @@ class LiveWorld:
             raise ProviderError("unavailable", f"Open-Meteo request failed: {type(exc).__name__}") from None
         if resp.status_code != 200:
             raise ProviderError("unavailable", f"Open-Meteo returned {resp.status_code}")
-        h = resp.json().get("hourly", {})
+        try:
+            h = resp.json().get("hourly", {})
+        except ValueError:
+            raise ProviderError("unavailable", "Open-Meteo returned an unreadable response") from None
         out = []
         for t, p in zip(h.get("time", []), h.get("precipitation_probability", [])):
             if p is None:

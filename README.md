@@ -2,7 +2,23 @@
 
 Turns available time, preferences, and practical constraints into an itinerary users can inspect, change, and follow. Solo and group trips share one engine.
 
-**Status: MVP, not yet verified end to end.** Implemented and tested (57 tests): shared contracts, the deterministic planner/validator, the tool-calling agent loop (Gemini, with a scripted model for tests), live place and weather data (OpenStreetMap, Open-Meteo), and a small web app that requires the device location and tracks it during the quest. **Not yet verified:** a complete live run (real Gemini + live data) ending in a saved plan in the browser, and the page itself in a browser. Free-tier Gemini limits (for example `gemini-3.8-flash` allows only 20 requests/day) can stop runs; the default model is `gemini-3.5-flash-lite`. See [docs/CHECKLIST.md](docs/CHECKLIST.md) and [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
+**Status: MVP with a replayable demo.** Implemented and tested (57 tests): shared contracts, the deterministic planner/validator, the tool-calling agent loop (Gemini, with a scripted model for tests), live place and weather data (OpenStreetMap, Open-Meteo), and a single-page web app that requires the device location and tracks it during the quest. **New:** `fixtures/demo/replay-run.json` is a labeled recording of one full agent run — open `?replay=1` for a bulletproof offline demo that needs no API keys (see [docs/DEMO.md](docs/DEMO.md)). **Not yet verified:** a complete live run (real Gemini + live data) ending in a saved plan in the browser. Free-tier Gemini limits (for example `gemini-3.8-flash` allows only 20 requests/day) can stop live runs; the default model is `gemini-3.5-flash-lite`. See [docs/CHECKLIST.md](docs/CHECKLIST.md) and [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
+
+## Demo (no keys needed)
+
+```bash
+uv sync
+uv run uvicorn server.api.app:app --port 8000   # open http://localhost:8000/?replay=1
+```
+
+`?replay=1` plays back `fixtures/demo/replay-run.json`: a recorded Saturday-afternoon
+run in downtown Minneapolis (Mill Ruins Park → Stone Arch Bridge → Father Hennepin
+Bluff Park → Aster Cafe), with the 12 real agent events, a validated provisional plan
+(13/14 checks pass; the café's unknown price is marked unknown, not assumed free), and
+a visible REPLAY badge. It proves the shape of the system — agent proposes, code
+validates, unknowns stay unknown — without depending on any live model. It is a
+recording, labeled as such; it does not prove a live run. Full script and fallbacks:
+[docs/DEMO.md](docs/DEMO.md).
 
 ## Team
 TODO

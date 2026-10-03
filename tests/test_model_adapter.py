@@ -183,3 +183,12 @@ def test_retry_after_header_is_honored_but_capped():
 def test_default_backoff_is_long_enough_for_per_minute_limits():
     p = GeminiProvider(SECRET, "m")
     assert p._max_retries >= 3 and p._backoff >= 5.0
+
+
+def test_construction_survives_unparseable_proxy_env(monkeypatch):
+    # Regression: bare "[::1]" in NO_PROXY made httpx raise InvalidURL at Client()
+    # construction, which killed provider setup before any request was made.
+    monkeypatch.setenv("NO_PROXY", "localhost,[::1]")
+    monkeypatch.setenv("no_proxy", "localhost,[::1]")
+    p = GeminiProvider(SECRET, "m")
+    assert p._max_retries >= 3 and p._backoff >= 5.0

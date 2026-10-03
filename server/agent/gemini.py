@@ -31,7 +31,7 @@ class GeminiProvider:
     name = "gemini"
 
     def __init__(self, api_key: str, model: str, *, client: httpx.Client | None = None,
-                 base_url: str = BASE_URL, max_retries: int = 2, backoff_s: float = 2.0,
+                 base_url: str = BASE_URL, max_retries: int = 3, backoff_s: float = 5.0, max_wait_s: float = 60.0,
                  sleep: Callable[[float], None] = time.sleep, timeout_s: float = 60.0):
         if not api_key:
             raise ModelError("GEMINI_API_KEY is not set")
@@ -41,7 +41,14 @@ class GeminiProvider:
         self._base = base_url.rstrip("/")
         self._max_retries = max_retries
         self._backoff = backoff_s
+        self._max_wait = max_wait_s
         self._sleep = sleep
+
+    def _wait_s(self, resp: httpx.Response, attempt: int) -> float:
+        """Honor Retry-After when present; otherwise exponential backoff. Always capped."""
+        hinted = _retry_after(resp)
+        wait = hinted if hinted is not None else self._backoff * (2 ** attempt)
+        return max(0.0, min(wait, self._max_wait))
 
     def start(self, *, system: str, tools: Sequence[ToolSpec]) -> GeminiSession:
         return GeminiSession(self, system, tuple(tools))
@@ -55,7 +62,7 @@ class GeminiProvider:
             except httpx.HTTPError as exc:  # network failure; the key is never in the message
                 raise ModelError(f"Gemini request failed: {type(exc).__name__}") from None
             if resp.status_code in RETRY_STATUSES and attempt < self._max_retries:
-                self._sleep(self._backoff * (2 ** attempt))
+                self._sleep(self._wait_s(resp, attempt))
                 continue
             if resp.status_code in RETRY_STATUSES:
                 raise ModelRateLimited(f"Gemini returned {resp.status_code} after "
@@ -103,6 +110,14 @@ class GeminiSession:
                                       arguments=step.get("arguments") or {}))
         usage = {k: v for k, v in (data.get("usage") or {}).items() if isinstance(v, int)}
         return ModelTurn(text="".join(text_parts), tool_calls=tuple(calls), usage=usage)
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    raw = resp.headers.get("retry-after")
+    try:
+        return float(raw) if raw is not None else None
+    except ValueError:
+        return None
 
 
 def _error_text(resp: httpx.Response) -> str:

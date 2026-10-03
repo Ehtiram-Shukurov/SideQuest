@@ -2,7 +2,7 @@
 
 Turns available time, preferences, and practical constraints into an itinerary users can inspect, change, and follow. Solo and group trips share one engine.
 
-**Status: early foundation.** The shared contracts and the deterministic planning/validation core are implemented and tested. There is no agent, no provider integration, no API server and no UI yet. See [docs/CHECKLIST.md](docs/CHECKLIST.md) for exactly what exists, and [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) for the full specification.
+**Status: MVP, not yet verified end to end.** Implemented and tested (57 tests): shared contracts, the deterministic planner/validator, the tool-calling agent loop (Gemini, with a scripted model for tests), live place and weather data (OpenStreetMap, Open-Meteo), and a small web app that requires the device location and tracks it during the quest. **Not yet verified:** a complete live run (real Gemini + live data) ending in a saved plan in the browser, and the page itself in a browser. Free-tier Gemini limits (for example `gemini-3.8-flash` allows only 20 requests/day) can stop runs; the default model is `gemini-3.5-flash-lite`. See [docs/CHECKLIST.md](docs/CHECKLIST.md) and [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
 
 ## Team
 TODO
@@ -16,17 +16,19 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync
 uv run pytest
+cp .env.example .env   # then set GEMINI_API_KEY (never commit .env)
+uv run uvicorn server.api.app:app --port 8000   # open http://localhost:8000
 ```
 
-No API keys are needed for the current code. `.env.example` lists the keys later work packages will need.
+Tests need no keys. The app needs `GEMINI_API_KEY`; "Demo" data mode uses invented venues, "Live" uses OpenStreetMap near your location.
 
 ## Layout
 - `server/models/` Pydantic contracts (trip, member, place, plan, evidence, validation)
 - `server/planning/` money allocation, schedule assembly, validators
-- `server/agent/`, `server/tools/`, `server/providers/` placeholders for later work packages
-- `web/` placeholder for the React + TypeScript interface
-- `db/migrations/` placeholder for the PostgreSQL schema
-- `skills/` placeholder for agent skill files
-- `fixtures/` placeholder for recorded provider responses (current test data is synthetic, in `tests/helpers.py`)
-- `tests/`
-- `docs/`
+- `server/agent/` model adapter (Gemini), scripted test model, agent loop, demo and smoke scripts
+- `server/tools/` the agent's typed tools; `server/providers/` live (OpenStreetMap, Open-Meteo) and synthetic data
+- `server/api/` FastAPI app; `web/` single-page UI (location required)
+- `skills/` instructions loaded into the agent's system prompt
+- `tests/` 57 tests (scripted model, synthetic data; no keys needed)
+- `docs/` build plan and checklist (the checklist predates the MVP and is partly out of date)
+- `db/migrations/`, `fixtures/` empty placeholders

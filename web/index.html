@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SideQuest</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1b2430; --mute:#5d6b7b; --line:#e2e6ec; --brand:#1f6feb;
+          --ok:#1a7f4b; --warn:#a15c00; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12161c; --card:#1a2028; --ink:#e8edf3; --mute:#9aa7b6;
+          --line:#2b3440; --brand:#5b9dff; --ok:#46c38b; --warn:#e0a13a; --bad:#ff7b72; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns:1fr; }
+  @media (min-width:900px) { main { grid-template-columns:380px 1fr; align-items:start; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  h1 { margin:0 0 4px; font-size:22px; } h2 { margin:0 0 10px; font-size:17px; }
+  p.sub { margin:0 0 12px; color:var(--mute); font-size:14px; }
+  label { display:block; font-size:13px; color:var(--mute); margin:10px 0 4px; }
+  textarea, input, select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px;
+          background:var(--bg); color:var(--ink); font:inherit; }
+  textarea { min-height:70px; resize:vertical; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button { padding:10px 14px; border:0; border-radius:8px; background:var(--brand); color:#fff; font:inherit;
+          font-weight:600; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--brand); border:1px solid var(--brand); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .loc { padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--line); font-size:14px; }
+  .loc.ok { border-color:var(--ok); } .loc.bad { border-color:var(--bad); }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:13px; font-weight:600; }
+  .b-checked { background:color-mix(in srgb,var(--ok) 18%,transparent); color:var(--ok); }
+  .b-provisional { background:color-mix(in srgb,var(--warn) 18%,transparent); color:var(--warn); }
+  .b-failed { background:color-mix(in srgb,var(--bad) 18%,transparent); color:var(--bad); }
+  ol.events { margin:0; padding-left:20px; font-size:14px; color:var(--mute); }
+  .stop { display:grid; grid-template-columns:86px 1fr; gap:10px; padding:10px 0; border-top:1px solid var(--line); }
+  .stop:first-of-type { border-top:0; } .stop.next { background:color-mix(in srgb,var(--brand) 8%,transparent); }
+  .time { font-variant-numeric:tabular-nums; color:var(--mute); font-size:14px; }
+  .issue { font-size:14px; margin:4px 0; } .issue.fail { color:var(--bad); } .issue.unknown { color:var(--warn); }
+  #map { height:340px; border-radius:10px; border:1px solid var(--line); margin-top:12px; }
+  .note { color:var(--mute); font-size:13px; margin:2px 0; }
+  .hide { display:none; } .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card">
+    <h1>SideQuest</h1>
+    <p class="sub">Plans a short outing near you and checks the logistics. Needs your location.</p>
+
+    <div id="loc" class="loc bad">Location not shared yet.</div>
+    <button id="locBtn" class="secondary" style="margin-top:8px">Share my location</button>
+
+    <label for="req">What do you feel like doing?</label>
+    <textarea id="req">Some food and a short walk outside, then back here.</textarea>
+    <div class="row">
+      <div><label for="mins">Time available (min)</label><input id="mins" type="number" min="30" max="600" value="120"></div>
+      <div><label for="mode">Getting around</label>
+        <select id="mode"><option value="walk">Walk</option><option value="bike">Bike</option><option value="car">Car (I'm driving)</option></select></div>
+    </div>
+    <div class="row">
+      <div><label for="budget">Budget (USD)</label><input id="budget" type="number" min="0" step="1" placeholder="e.g. 30"></div>
+      <div><label for="nolimit">&nbsp;</label><label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--ink)">
+        <input id="nolimit" type="checkbox" style="width:auto"> No limit</label></div>
+    </div>
+    <label for="data">Data</label>
+    <select id="data"><option value="live">Live: real places near me (OpenStreetMap)</option><option value="demo">Demo: invented venues</option></select>
+    <button id="go" style="margin-top:14px;width:100%" disabled>Plan my outing</button>
+    <p id="msg" class="note"></p>
+  </section>
+
+  <section>
+    <div class="card hide" id="progressCard"><h2>Working</h2><ol class="events" id="events"></ol></div>
+    <div class="card hide" id="resultCard">
+      <h2 id="rTitle">Your plan</h2>
+      <div id="rBadge"></div>
+      <p id="rExpl" class="sub"></p>
+      <div id="stops"></div>
+      <div id="issues"></div>
+      <div id="notes"></div>
+      <div id="map"></div>
+      <div style="margin-top:12px"><button id="quest" class="hide">Start Quest (track my location)</button>
+        <button id="arrived" class="secondary hide">I've arrived</button></div>
+      <p id="questInfo" class="sub"></p>
+    </div>
+  </section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const $ = id => document.getElementById(id);
+let pos = null, map = null, layer = null, meMarker = null, plan = null, watchId = null, nextIdx = 0;
+
+function setLoc(text, cls) { $('loc').textContent = text; $('loc').className = 'loc ' + cls; }
+
+function getLocation() {
+  if (!navigator.geolocation) { setLoc('This browser cannot share location.', 'bad'); return; }
+  setLoc('Asking for your location…', '');
+  navigator.geolocation.getCurrentPosition(p => {
+    pos = p.coords;
+    setLoc(`Location ready (${pos.latitude.toFixed(4)}, ${pos.longitude.toFixed(4)}, ±${Math.round(pos.accuracy)} m)`, 'ok');
+    $('go').disabled = false;
+  }, e => {
+    pos = null; $('go').disabled = true;
+    setLoc('Location is required. ' + (e.code === 1 ? 'Permission was denied: allow location for this site and try again.' : e.message), 'bad');
+  }, { enableHighAccuracy: true, timeout: 15000 });
+}
+$('locBtn').onclick = getLocation;
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+$('go').onclick = async () => {
+  if (!pos) { getLocation(); return; }
+  $('go').disabled = true; $('msg').textContent = ''; $('msg').className = 'note';
+  $('resultCard').classList.add('hide'); $('events').replaceChildren(); $('progressCard').classList.remove('hide');
+  stopQuest();
+  const body = { request: $('req').value, lat: pos.latitude, lon: pos.longitude,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone, minutes: +$('mins').value || 120,
+    budget_dollars: $('budget').value === '' ? null : +$('budget').value, no_budget_limit: $('nolimit').checked,
+    mode: $('mode').value, data: $('data').value };
+  const r = await fetch('/api/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) { fail(typeof j.detail === 'string' ? j.detail : 'Request rejected: check the form.'); return; }
+  poll(j.run_id);
+};
+
+function fail(text) { $('msg').textContent = text; $('msg').className = 'note err'; $('go').disabled = !pos; $('progressCard').classList.add('hide'); }
+
+async function poll(id) {
+  const j = await (await fetch('/api/runs/' + id)).json();
+  $('events').replaceChildren(...j.events.filter(e => e.kind !== 'tool_call').map(e => el('li', '', e.summary)));
+  if (!j.done) { setTimeout(() => poll(id), 1500); return; }
+  $('go').disabled = !pos;
+  if (j.error) { fail('Something went wrong: ' + j.error); return; }
+  render(j.result);
+}
+
+function render(res) {
+  $('progressCard').classList.add('hide'); $('resultCard').classList.remove('hide');
+  plan = res.proposal; nextIdx = 0;
+  $('stops').replaceChildren(); $('issues').replaceChildren(); $('notes').replaceChildren(); $('rBadge').replaceChildren();
+  $('quest').classList.add('hide'); $('arrived').classList.add('hide'); $('questInfo').textContent = '';
+  if (!plan) {
+    $('rTitle').textContent = res.status === 'needs_clarification' ? 'One question first' : 'No plan this time';
+    $('rExpl').textContent = (res.clarification && res.clarification.question) || res.message || 'The planner did not produce a plan.';
+    if (res.clarification) for (const o of res.clarification.options || []) $('issues').append(el('div', 'issue', '• ' + o));
+    if (res.conflict) $('issues').append(el('div', 'note', 'Why: ' + res.conflict.message));
+    drawMap(res.origin, []); return;
+  }
+  $('rTitle').textContent = 'Your plan';
+  const label = { checked: 'All checks passed', provisional: 'Provisional: some facts unknown', failed: 'Not valid' }[plan.overall];
+  $('rBadge').append(el('span', 'badge b-' + plan.overall, label + ` · ${plan.checks_passed} checks passed`));
+  if (res.data.synthetic) $('rBadge').append(el('span', 'badge b-provisional', ' DEMO DATA'));
+  $('rExpl').textContent = plan.explanation;
+  plan.blocks.forEach((b, i) => {
+    const s = el('div', 'stop'); s.id = 'stop' + i;
+    s.append(el('div', 'time', `${b.start}–${b.end}`));
+    const d = el('div'); d.append(el('strong', '', b.name), el('div', 'note', b.cost + (b.shortened ? ' · shortened to fit hours' : '')));
+    s.append(d); $('stops').append(s);
+  });
+  for (const i of plan.issues) $('issues').append(el('div', 'issue ' + i.status, (i.status === 'fail' ? '✗ ' : '? ') + i.message));
+  for (const n of plan.notes) $('notes').append(el('div', 'note', n));
+  drawMap(res.origin, plan.blocks);
+  $('quest').classList.remove('hide'); highlight();
+}
+
+function drawMap(origin, blocks) {
+  if (!map) { map = L.map('map'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map); }
+  if (layer) layer.remove(); layer = L.layerGroup().addTo(map); meMarker = null;
+  const pts = [[origin.lat, origin.lon]];
+  L.circleMarker(pts[0], { radius: 7, color: '#1f6feb' }).bindTooltip('Start / end').addTo(layer);
+  blocks.forEach((b, i) => { if (b.lat != null) { pts.push([b.lat, b.lon]); L.marker([b.lat, b.lon]).bindTooltip((i + 1) + '. ' + b.name).addTo(layer); } });
+  map.fitBounds(pts, { padding: [30, 30], maxZoom: 16 }); setTimeout(() => map.invalidateSize(), 50);
+}
+
+function highlight() {
+  document.querySelectorAll('.stop').forEach((s, i) => s.classList.toggle('next', i === nextIdx));
+}
+
+function dist(a, b, c, d) { // metres, haversine
+  const R = 6371000, r = x => x * Math.PI / 180, dp = r(c - a), dl = r(d - b);
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function stopQuest() { if (watchId != null) navigator.geolocation.clearWatch(watchId); watchId = null; }
+
+$('quest').onclick = () => {
+  if (!plan) return;
+  $('quest').classList.add('hide'); $('arrived').classList.remove('hide');
+  $('questInfo').textContent = 'Tracking your location here in the browser. It is not sent anywhere.';
+  watchId = navigator.geolocation.watchPosition(p => {
+    pos = p.coords;
+    if (map) { if (!meMarker) meMarker = L.circleMarker([pos.latitude, pos.longitude], { radius: 8, color: '#d9480f', fillOpacity: .8 }).addTo(map); else meMarker.setLatLng([pos.latitude, pos.longitude]); }
+    const b = plan.blocks[nextIdx];
+    if (!b) { $('questInfo').textContent = 'All stops done. Head home!'; return; }
+    if (b.lat == null) { $('questInfo').textContent = `Next: ${b.name} at ${b.start}`; return; }
+    const m = dist(pos.latitude, pos.longitude, b.lat, b.lon);
+    if (m < 60) { $('questInfo').textContent = `You're at ${b.name}. Enjoy until ${b.end}!`; }
+    else $('questInfo').textContent = `Next: ${b.name} at ${b.start} · ${m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km'} away`;
+  }, e => { $('questInfo').textContent = 'Lost your location: ' + e.message; }, { enableHighAccuracy: true, maximumAge: 5000 });
+};
+$('arrived').onclick = () => { nextIdx++; highlight(); if (nextIdx >= plan.blocks.length) { $('questInfo').textContent = 'All stops done. Head back to your start!'; stopQuest(); $('arrived').classList.add('hide'); } };
+
+getLocation();
+</script>
+</body>
+</html>

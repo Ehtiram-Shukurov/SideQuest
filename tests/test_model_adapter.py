@@ -163,3 +163,23 @@ def test_scripted_provider_replays_turns_and_records_inputs():
     with pytest.raises(ModelError):
         s.send(user="more")  # script exhausted
     assert s.log[0] == ("go", [])
+
+
+def test_retry_after_header_is_honored_but_capped():
+    sleeps: list[float] = []
+
+    def handler(req, n):
+        wait = {1: "7", 2: "9999"}.get(n)
+        if wait:
+            return httpx.Response(429, headers={"retry-after": wait}, json={})
+        return httpx.Response(200, json={"id": "i", "status": "completed", "steps": [
+            {"type": "model_output", "content": [{"type": "text", "text": "ok"}]}]})
+
+    provider, seen = make(handler, max_retries=3, max_wait_s=60.0, sleep=sleeps.append)
+    assert provider.start(system="s", tools=[]).send(user="hi").text == "ok"
+    assert sleeps == [7.0, 60.0]  # hint used; absurd hint capped
+
+
+def test_default_backoff_is_long_enough_for_per_minute_limits():
+    p = GeminiProvider(SECRET, "m")
+    assert p._max_retries >= 3 and p._backoff >= 5.0

@@ -11,7 +11,7 @@ from pathlib import Path
 from .gemini import GeminiProvider
 from .model import ModelError, ModelProvider
 
-DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"  # from Google's model list; override with GEMINI_MODEL
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"  # free tier: gemini-3.8-flash allows only 20 requests/day; override with GEMINI_MODEL
 
 
 def load_dotenv(path: Path | str = ".env") -> None:

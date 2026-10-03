@@ -26,7 +26,7 @@ TODO
 ## Summary
 SideQuest's model proposes; deterministic code checks. Every plan is validated pass / fail / unknown against hard constraints (time, per-person budget, opening hours, travel, accessibility, locked commitments). Missing data stays unknown rather than being assumed fine.
 
-## How to Run
+## How to run
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash

@@ -18,7 +18,7 @@ from server.tools.context import Proposal, ToolContext
 from server.tools.planning_tools import build_registry
 from server.tools.registry import ToolOutput
 
-from .model import ModelError, ModelProvider, ToolResult
+from .model import ModelError, ModelProvider, ModelSession, ToolResult
 
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 DEFAULT_SKILLS = ("plan-and-validate.md",)
@@ -54,6 +54,9 @@ class RunResult:
     message: str = ""
     usage: dict[str, int] = field(default_factory=dict)
     tool_calls: int = 0
+    # set when the run stopped to ask the user: lets the caller resume the same conversation
+    session: ModelSession | None = None
+    pending_results: list[ToolResult] = field(default_factory=list)
 
 
 def load_skills(names=DEFAULT_SKILLS, directory: Path = SKILLS_DIR) -> str:
@@ -99,13 +102,18 @@ def trip_snapshot(trip: Trip) -> dict[str, Any]:
 def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
               limits: RunLimits = RunLimits(), should_cancel: Callable[[], bool] = lambda: False,
               clock: Callable[[], float] = time.monotonic, skills: str | None = None,
-              on_event: Callable[[RunEvent], None] | None = None) -> RunResult:
+              on_event: Callable[[RunEvent], None] | None = None,
+              session: ModelSession | None = None, opening: str | None = None,
+              tool_results: list[ToolResult] | None = None) -> RunResult:
+    """Run the loop. Resume a paused conversation with `session` + `tool_results` (the answer to
+    an ask_user call); start a fresh conversation with a custom first message via `opening`."""
     registry = build_registry(ctx)
     system = BASE_PROMPT + "\n\n" + (skills if skills is not None else load_skills())
     events: list[RunEvent] = []
     usage: dict[str, int] = {}
     calls = 0
     started = clock()
+    proposals_before = len(ctx.proposals)
 
     def emit(kind: str, summary: str, **data: Any) -> None:
         ev = RunEvent(len(events) + 1, kind, summary, data)
@@ -122,9 +130,14 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
             usage[k] = usage.get(k, 0) + v
 
     try:
-        session = provider.start(system=system, tools=registry.specs())
-        first = json.dumps({"request": request, "trip": trip_snapshot(ctx.trip)}, ensure_ascii=False)
-        turn = session.send(user=first)
+        if session is None:
+            session = provider.start(system=system, tools=registry.specs())
+        if tool_results:
+            turn = session.send(tool_results=tool_results)
+        else:
+            first = opening if opening is not None else json.dumps(
+                {"request": request, "trip": trip_snapshot(ctx.trip)}, ensure_ascii=False)
+            turn = session.send(user=first)
         add_usage(turn.usage)
         for _ in range(limits.max_turns):
             if should_cancel():
@@ -136,7 +149,7 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
             if not turn.tool_calls:
                 text = turn.text.strip()
                 emit("final", "Model replied without saving a proposal", text=text[:500])
-                if ctx.proposals:
+                if len(ctx.proposals) > proposals_before:  # only a proposal saved during THIS run
                     return finish("proposal_saved", text, proposal=ctx.proposals[-1])
                 return finish("no_proposal", text)
 
@@ -165,7 +178,7 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
                 return finish("proposal_saved", ctx.proposals[-1].explanation, proposal=ctx.proposals[-1])
             if terminal == "needs_clarification":
                 return finish("needs_clarification", (ctx.clarification or {}).get("question", ""),
-                              clarification=ctx.clarification)
+                              clarification=ctx.clarification, session=session, pending_results=results)
             turn = session.send(tool_results=results)
             add_usage(turn.usage)
         emit("limit", f"Turn limit of {limits.max_turns} reached")

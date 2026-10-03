@@ -39,3 +39,4 @@ class ToolContext:
     clarification: dict[str, Any] | None = None
     last_conflict: dict[str, Any] | None = None
     validations_run: int = 0
+    excluded: set[str] = field(default_factory=set)  # place ids the user removed or swapped out

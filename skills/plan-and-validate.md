@@ -36,3 +36,12 @@ constraints, with unknown fields listed under `known_gaps`).
 ## Stop conditions
 Stop after `save_proposal` succeeds or after `ask_user`. The run also stops at its tool-call,
 validation and time limits.
+
+## Answers and replanning
+- If you resume after `ask_user`, the tool result holds the user's answer and `applied`, a note on
+  what changed (for example a longer time window or a place the user skipped). Constraints may have
+  changed, so call `assemble_plan` and `validate_plan` again; do not reuse an old plan id.
+- If the first message has a `replan` section, the user is changing a saved plan. Locked stops are
+  fixed and `assemble_plan` keeps them automatically; do not move or drop them. Never use ids in
+  `excluded_place_ids` (tools reject them). Keep the other current stops unless the change forces
+  otherwise, reuse earlier research where you can, and change as little as possible.

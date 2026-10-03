@@ -106,6 +106,7 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
             found = ctx.places.search(category=a.category, query=a.query, limit=a.limit)
         except ProviderError as exc:
             return _provider_error(exc)
+        found = [p for p in found if p.id not in ctx.excluded]
         for p in found:
             ctx.candidates[p.id] = p
         data = _envelope(ctx, ctx.places.name, ctx.places.synthetic,
@@ -202,6 +203,9 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
         unknown = [p for p in a.place_ids if p not in ctx.candidates]
         if unknown:  # the model may only schedule venues that a provider returned
             return error("unknown_ids", "ids not returned by search_places", ids=unknown)
+        banned = [p for p in a.place_ids if p in ctx.excluded]
+        if banned:  # the user removed these; a hard gate, not a suggestion
+            return error("excluded_by_user", "the user removed these places; choose others", ids=banned)
         nodetails = [p for p in a.place_ids if p not in ctx.details]
         if nodetails:
             return error("missing_details", "call get_place_details first", ids=nodetails)

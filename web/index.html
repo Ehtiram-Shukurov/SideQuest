@@ -8,710 +8,855 @@
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   :root{
-    --bg:#f4f6f9; --card:#ffffff; --ink:#17222e; --mute:#5d6b7d; --line:#e1e6ee;
-    --brand:#1f6feb; --brand-ink:#ffffff;
-    --ok:#177245; --warn:#9a5b00; --bad:#b3261e;
-    --ok-bg:#e3f4ea; --warn-bg:#fdf1dc; --bad-bg:#fbe7e5;
-    --radius:14px; --shadow:0 1px 3px rgba(20,40,70,.08), 0 4px 14px rgba(20,40,70,.06);
+    --bg:#f3f5f9; --surface:#ffffff; --surface-2:#f6f8fc; --ink:#0e1a2b; --mute:#566579; --line:#dfe5ee;
+    --brand:#2459e6; --brand-ink:#ffffff; --brand-soft:#e8eefe; --accent:#c2410c;
+    --ok:#0f7a4b; --ok-bg:#e2f5ea; --warn:#8f5200; --warn-bg:#fdf0d9; --bad:#b42318; --bad-bg:#fde8e6;
+    --radius:16px; --radius-sm:10px;
+    --shadow:0 1px 2px rgba(15,30,60,.06), 0 8px 24px rgba(15,30,60,.07);
+    --font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#10141a; --card:#182029; --ink:#e9eef5; --mute:#9aA7b8; --line:#2a3441;
-      --brand:#5b9dff; --brand-ink:#0b1524;
-      --ok:#4fd08d; --warn:#e8ab45; --bad:#ff8a80;
-      --ok-bg:#123526; --warn-bg:#3a2c10; --bad-bg:#3d1c19;
-      --shadow:0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+    :root:not([data-theme="light"]){
+      --bg:#0c1118; --surface:#151c26; --surface-2:#1b2431; --ink:#e8eef6; --mute:#9fb0c4; --line:#263143;
+      --brand:#7aa5ff; --brand-ink:#0a1424; --brand-soft:#1b2a4a; --accent:#ff9a62;
+      --ok:#5fd69a; --ok-bg:#0f2f22; --warn:#f0b254; --warn-bg:#35280d; --bad:#ff8f85; --bad-bg:#3a1a17;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
     }
   }
+  :root[data-theme="dark"]{
+    --bg:#0c1118; --surface:#151c26; --surface-2:#1b2431; --ink:#e8eef6; --mute:#9fb0c4; --line:#263143;
+    --brand:#7aa5ff; --brand-ink:#0a1424; --brand-soft:#1b2a4a; --accent:#ff9a62;
+    --ok:#5fd69a; --ok-bg:#0f2f22; --warn:#f0b254; --warn-bg:#35280d; --bad:#ff8f85; --bad-bg:#3a1a17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-  header.top{max-width:1180px;margin:0 auto;padding:20px 16px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .logo{font-size:24px;font-weight:800;letter-spacing:-.02em}
-  .logo .q{color:var(--brand)}
-  .tagline{color:var(--mute);font-size:14px;margin:2px 0 0}
-  .spacer{flex:1}
-  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;
-    font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--mute)}
-  .chip.live{border-color:var(--ok);color:var(--ok)}
-  /* ---- replay banner: unmissable ---- */
-  #replayBanner{display:none;margin:12px auto 0;max-width:1180px;padding:0 16px}
-  body.replay #replayBanner{display:block}
-  #replayBanner .inner{
-    background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 14px,transparent 14px,transparent 28px);
-    border:2px solid var(--warn);border-radius:var(--radius);padding:12px 16px;
-    font-weight:800;letter-spacing:.02em;color:var(--warn);text-align:center}
-  main{max-width:1180px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:1fr}
-  @media(min-width:960px){main{grid-template-columns:400px 1fr;align-items:start}}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:18px;box-shadow:var(--shadow)}
-  h1{margin:0;font-size:20px;letter-spacing:-.01em}
-  h2{margin:0 0 10px;font-size:17px;letter-spacing:-.01em}
-  p.sub{margin:6px 0 12px;color:var(--mute);font-size:14px}
-  label{display:block;font-size:13px;font-weight:600;color:var(--mute);margin:12px 0 5px}
-  textarea,input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
-    background:var(--bg);color:var(--ink);font:inherit}
-  textarea{min-height:76px;resize:vertical}
-  textarea:focus,input:focus,select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  button{padding:11px 16px;border:0;border-radius:10px;background:var(--brand);color:var(--brand-ink);
-    font:inherit;font-weight:700;cursor:pointer;transition:transform .06s ease, filter .15s}
-  button:hover:not(:disabled){filter:brightness(1.07)}
-  button:active:not(:disabled){transform:scale(.98)}
-  button:disabled{opacity:.45;cursor:not-allowed}
-  button.secondary{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
-  button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line)}
-  #go{width:100%;margin-top:16px;font-size:17px;padding:13px}
-  /* ---- location block: prominent ---- */
-  .loc{padding:12px 14px;border-radius:10px;background:var(--bg);border:2px solid var(--line);
-    font-size:14px;display:flex;gap:10px;align-items:flex-start;margin-top:12px}
-  .loc .dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px;background:var(--mute)}
-  .loc.ok{border-color:var(--ok)} .loc.ok .dot{background:var(--ok)}
-  .loc.bad{border-color:var(--bad)} .loc.bad .dot{background:var(--bad)}
-  .loc small{display:block;color:var(--mute);margin-top:2px}
-  #msg{margin:10px 0 0;font-size:14px;color:var(--mute)}
-  #msg.err{color:var(--bad);font-weight:600}
-  /* ---- activity feed ---- */
-  .feedhead{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-  .spinner{width:18px;height:18px;flex:none;border:3px solid var(--line);border-top-color:var(--brand);
-    border-radius:50%;animation:spin 1s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  ol#events{list-style:none;margin:0;padding:0;max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
-  ol#events li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--mute);
-    background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;
-    animation:fadein .25s ease}
-  @keyframes fadein{from{opacity:0;transform:translateY(-3px)}to{opacity:1}}
-  ol#events li .ic{flex:none;width:20px;text-align:center}
-  ol#events li.tool_call{border-left:3px solid var(--brand)}
-  ol#events li.tool_result{border-left:3px solid var(--line);margin-left:14px;font-size:12.5px}
-  ol#events li.error,ol#events li.limit{border-left:3px solid var(--bad);color:var(--bad)}
-  ol#events li.final{border-left:3px solid var(--ok);color:var(--ink);font-weight:600}
-  /* ---- badges ---- */
-  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px}
-  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700}
-  .b-checked{background:var(--ok-bg);color:var(--ok)}
-  .b-provisional{background:var(--warn-bg);color:var(--warn)}
-  .b-failed{background:var(--bad-bg);color:var(--bad)}
-  .b-demo{background:var(--warn-bg);color:var(--warn);border:1px dashed var(--warn)}
-  .meta{color:var(--mute);font-size:13px;margin:6px 0 0}
-  .expl{margin:10px 0 4px;font-size:15px}
-  /* ---- timeline ---- */
-  .timeline{margin-top:6px}
-  .stop{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:14px 12px;border:1px solid var(--line);
-    border-radius:12px;margin:0;background:var(--card);position:relative}
-  .stop + .leg{margin:0}
-  .stop.next{border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 35%,transparent)}
-  .stop .time{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;color:var(--mute);padding-top:2px}
-  .stop h3{margin:0 0 4px;font-size:16px}
-  .stop .costline{font-size:13.5px;color:var(--mute)}
-  .flag{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--warn);
-    background:var(--warn-bg);border-radius:6px;padding:2px 8px}
-  .leg{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 104px;color:var(--mute);font-size:13px}
-  .leg .line{flex:1;border-top:2px dashed var(--line);min-width:20px}
-  /* ---- issues / notes ---- */
-  .issues{margin-top:14px;display:flex;flex-direction:column;gap:8px}
-  .issue{font-size:14px;padding:9px 12px;border-radius:10px;display:flex;gap:10px;align-items:flex-start}
-  .issue.fail{background:var(--bad-bg);color:var(--bad)}
-  .issue.unknown{background:var(--warn-bg);color:var(--warn)}
-  .issue .mk{font-weight:800;flex:none}
-  .notes{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
-  .note{color:var(--mute);font-size:13px;margin:5px 0;display:flex;gap:8px}
-  .conflict{margin-top:12px;background:var(--bad-bg);border:1px solid var(--bad);color:var(--bad);
-    border-radius:10px;padding:10px 14px;font-size:14px}
-  /* ---- options (clarification) ---- */
-  .opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  /* ---- map ---- */
-  #mapwrap{margin-top:14px}
-  #map{height:360px;border-radius:12px;border:1px solid var(--line);z-index:0}
-  .mapnote{font-size:13px;color:var(--mute);margin-top:8px}
-  /* ---- quest ---- */
-  #questPanel{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--bg)}
-  #questPanel.active{border-color:var(--brand)}
-  #questNext{font-size:16px;font-weight:700;margin:0 0 2px}
-  #questInfo{color:var(--mute);font-size:14px;margin:4px 0 10px}
-  .privacy{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--mute);margin-top:10px;
-    background:var(--card);border:1px dashed var(--line);border-radius:8px;padding:8px 10px}
-  .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
   .hide{display:none!important}
-  .empty{text-align:center;padding:36px 20px;color:var(--mute)}
-  .empty .big{font-size:40px;margin-bottom:8px}
-  .err{color:var(--bad)}
-  footer{max-width:1180px;margin:0 auto;padding:8px 16px 28px;color:var(--mute);font-size:12.5px}
-  @media(max-width:959px){
-    #map{height:260px}
-    .leg{padding-left:12px}
-    .stop{grid-template-columns:78px 1fr}
-    header.top{padding-top:14px}
+  .skip{position:absolute;left:-999px;top:8px;background:var(--brand);color:var(--brand-ink);padding:8px 14px;border-radius:8px;z-index:50}
+  .skip:focus{left:8px}
+  :focus-visible{outline:3px solid var(--brand);outline-offset:2px;border-radius:6px}
+  svg.ic{width:1.15em;height:1.15em;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- header ---------- */
+  header.top{max-width:1240px;margin:0 auto;padding:16px 16px 4px;display:flex;align-items:center;gap:12px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:-.02em}
+  .brand .mark{width:34px;height:34px;border-radius:10px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center}
+  .brand .mark svg{width:20px;height:20px}
+  .brand .q{color:var(--brand)}
+  .spacer{flex:1}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;
+    border:1px solid var(--line);background:var(--surface);color:var(--mute);white-space:nowrap}
+  .chip.ok{color:var(--ok);border-color:var(--ok)} .chip.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-bg)}
+  .chip.bad{color:var(--bad);border-color:var(--bad);background:var(--bad-bg)} .chip.brand{color:var(--brand);border-color:var(--brand);background:var(--brand-soft)}
+  #replayBanner{display:none;margin:10px auto 0;max-width:1240px;padding:0 16px}
+  body.replay #replayBanner{display:block}
+  #replayBanner .inner{background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 14px,transparent 14px,transparent 28px);
+    border:2px solid var(--warn);border-radius:var(--radius);padding:12px 16px;font-weight:800;letter-spacing:.02em;color:var(--warn);text-align:center}
+
+  /* ---------- controls ---------- */
+  button{font:inherit;cursor:pointer;min-height:44px;padding:0 18px;border-radius:12px;border:1.5px solid transparent;
+    background:var(--brand);color:var(--brand-ink);font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    transition:transform .08s ease,filter .15s ease,background .15s ease}
+  button:hover:not(:disabled){filter:brightness(1.08)} button:active:not(:disabled){transform:scale(.98)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.secondary{background:transparent;color:var(--brand);border-color:var(--brand)}
+  button.ghost{background:var(--surface);color:var(--ink);border-color:var(--line)}
+  button.danger{background:transparent;color:var(--bad);border-color:var(--bad)}
+  button.icon{min-width:44px;padding:0;background:var(--surface);color:var(--ink);border-color:var(--line)}
+  button.small{min-height:44px;padding:0 14px;font-size:14px}
+  button[aria-pressed="true"].icon{background:var(--brand-soft);color:var(--brand);border-color:var(--brand)}
+  label,.lbl{display:block;font-size:13px;font-weight:700;color:var(--mute);margin:14px 0 6px}
+  textarea,input[type=text],input[type=number],select{width:100%;min-height:44px;padding:10px 12px;border:1.5px solid var(--line);
+    border-radius:12px;background:var(--surface-2);color:var(--ink);font:inherit}
+  textarea{min-height:92px;resize:vertical}
+  textarea:focus,input:focus,select:focus{outline:3px solid color-mix(in srgb,var(--brand) 45%,transparent);border-color:var(--brand)}
+  .field-err{color:var(--bad);font-size:13px;font-weight:600;margin:6px 0 0}
+  .help{color:var(--mute);font-size:13px;margin:4px 0 0}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .check{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600;color:var(--ink);margin:0}
+  .check input{width:20px;height:20px;min-height:0;accent-color:var(--brand)}
+
+  /* ---------- layout ---------- */
+  main{max-width:1240px;margin:0 auto;padding:12px 16px 90px;display:grid;gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+  .card h2{margin:0 0 6px;font-size:18px;letter-spacing:-.01em}
+  .card h2.big{font-size:22px}
+  p.sub{margin:4px 0 0;color:var(--mute);font-size:14px}
+  .compose{display:grid;gap:20px;grid-template-columns:1fr;max-width:1000px;margin:8px auto 0;width:100%}
+  @media(min-width:900px){.compose{grid-template-columns:1fr 1.1fr;align-items:start}}
+  .hero h1{margin:6px 0 10px;font-size:clamp(28px,4.6vw,44px);line-height:1.08;letter-spacing:-.03em}
+  .hero h1 .q{color:var(--brand)}
+  .hero p{color:var(--mute);font-size:17px;max-width:46ch}
+  .points{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:12px}
+  .points li{display:flex;gap:12px;align-items:flex-start;color:var(--ink);font-size:15px}
+  .points .dotic{flex:none;width:34px;height:34px;border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center}
+  .loc{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:2px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:14px}
+  .loc .dot{flex:none;width:12px;height:12px;border-radius:50%;margin-top:5px;background:var(--mute)}
+  .loc.ok{border-color:var(--ok)} .loc.ok .dot{background:var(--ok)} .loc.bad{border-color:var(--bad)} .loc.bad .dot{background:var(--bad)}
+  .loc small{display:block;color:var(--mute);margin-top:2px}
+  #go{width:100%;margin-top:18px;min-height:52px;font-size:17px}
+  #msg{margin:10px 0 0;font-size:14px}
+
+  /* ---------- working feed ---------- */
+  .feedhead{display:flex;align-items:center;gap:10px}
+  .spinner{width:20px;height:20px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:spin 1s linear infinite;flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  ol.feed{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+  ol.feed li{display:flex;gap:10px;font-size:13.5px;color:var(--mute);background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--brand);
+    border-radius:8px;padding:7px 10px;animation:fadein .25s ease}
+  ol.feed li.tool_result{border-left-color:var(--line);margin-left:12px;font-size:12.5px}
+  ol.feed li.error,ol.feed li.limit{border-left-color:var(--bad);color:var(--bad)}
+  ol.feed li.final{border-left-color:var(--ok);color:var(--ink);font-weight:600}
+  @keyframes fadein{from{opacity:0;transform:translateY(-3px)}to{opacity:1}}
+  .skeleton{display:grid;gap:10px;margin-top:14px}
+  .skeleton i{display:block;height:64px;border-radius:12px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%;animation:shimmer 1.4s linear infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
+
+  /* ---------- workspace ---------- */
+  .tripbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  .ws{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+  .col{display:grid;gap:16px;align-content:start;min-width:0}
+  .side{display:grid;gap:16px;align-content:start;min-width:0}
+  @media(min-width:1000px){
+    .ws{grid-template-columns:minmax(0,1.1fr) minmax(380px,.9fr);align-items:start}
+    .side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+  }
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 2px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:700}
+  .b-checked{background:var(--ok-bg);color:var(--ok)} .b-provisional{background:var(--warn-bg);color:var(--warn)}
+  .b-failed{background:var(--bad-bg);color:var(--bad)} .b-demo{background:var(--warn-bg);color:var(--warn);border:1px dashed var(--warn)}
+  .b-info{background:var(--brand-soft);color:var(--brand)}
+  .expl{margin:10px 0 0;font-size:15px}
+  .meta{color:var(--mute);font-size:13px;margin:8px 0 0}
+  .spend{margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
+  .spend .bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:8px}
+  .spend .bar i{display:block;height:100%;background:var(--brand);border-radius:99px}
+  .spend .bar i.over{background:var(--bad)}
+  ol.timeline{list-style:none;margin:16px 0 0;padding:0}
+  .leg{display:flex;align-items:center;gap:10px;margin:0 0 0 86px;padding:8px 0;color:var(--mute);font-size:13px}
+  .leg .line{flex:1;border-top:2px dashed var(--line);min-width:16px}
+  .stop{display:grid;grid-template-columns:74px 1fr;gap:12px;padding:14px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);
+    position:relative;transition:border-color .15s,box-shadow .15s}
+  .stop.next,.stop.focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 25%,transparent)}
+  .stop.locked{background:var(--surface-2)}
+  .stop .when{font-variant-numeric:tabular-nums;font-weight:800;font-size:15px;line-height:1.25}
+  .stop .when small{display:block;color:var(--mute);font-weight:600;font-size:12px}
+  .stop h3{margin:0;font-size:17px;line-height:1.3;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .stop .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--brand);color:var(--brand-ink);font-size:13px;font-weight:800}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .mini{display:inline-flex;gap:5px;align-items:center;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--mute)}
+  .mini.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)} .mini.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-bg)}
+  .mini.new{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)} .mini.moved{color:var(--brand);border-color:var(--brand);background:var(--brand-soft)}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .issues{margin-top:14px;display:grid;gap:8px}
+  .issue{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;font-size:14px}
+  .issue.fail{background:var(--bad-bg);color:var(--bad)} .issue.unknown{background:var(--warn-bg);color:var(--warn)}
+  .notes{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:4px}
+  .note{display:flex;gap:8px;color:var(--mute);font-size:13px}
+
+  /* ---------- clarification + diff + notices ---------- */
+  .ask{border:2px solid var(--brand);background:var(--brand-soft)}
+  .ask h2{display:flex;gap:8px;align-items:center}
+  .choices{display:grid;gap:8px;margin-top:12px}
+  .choices button{justify-content:flex-start;text-align:left;background:var(--surface);color:var(--ink);border:1.5px solid var(--line);font-weight:600}
+  .choices button:hover:not(:disabled){border-color:var(--brand)}
+  .answer-row{display:flex;gap:8px;margin-top:8px}
+  .answer-row input{flex:1}
+  .conflict{margin-top:12px;background:var(--bad-bg);border:1px solid var(--bad);color:var(--bad);border-radius:12px;padding:10px 14px;font-size:14px}
+  .notice{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:14px;font-weight:600}
+  .notice.err{background:var(--bad-bg);color:var(--bad)} .notice.info{background:var(--brand-soft);color:var(--brand)} .notice.warn{background:var(--warn-bg);color:var(--warn)}
+  .diff{border:2px solid var(--ok)}
+  .difflist{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px;font-size:14px}
+  .difflist li{display:flex;gap:8px;align-items:center}
+  .decide{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+
+  /* ---------- map + quest ---------- */
+  #map{height:340px;border-radius:12px;border:1px solid var(--line);z-index:0;background:var(--surface-2)}
+  .mapnote{font-size:13px;color:var(--warn);margin-top:8px}
+  .pin{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:14px;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+  .pin.focus{background:var(--accent);transform:scale(1.15)} .pin.home{background:#334155}
+  .quest{margin-top:14px;padding:14px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface-2)}
+  .quest.active{border-color:var(--brand)} .quest .nextline{font-weight:800;margin:0}
+  .privacy{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12.5px;color:var(--mute)}
+
+  /* ---------- assistant ---------- */
+  details.assist{padding:0} details.assist > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:16px 20px;font-weight:800;font-size:18px;min-height:56px}
+  details.assist > summary::-webkit-details-marker{display:none}
+  details.assist > summary .chev{margin-left:auto;transition:transform .2s} details.assist[open] > summary .chev{transform:rotate(180deg)}
+  .assist .inner{padding:0 20px 20px;display:grid;gap:14px}
+  .ctl{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+  .ctl .lbl{margin:0}
+  .ctl .line{display:flex;gap:8px;align-items:center}
+  .ctl .line select,.ctl .line input[type=number]{flex:1;min-width:0}
+  .ctl .check{font-size:13px}
+  details.hist summary{cursor:pointer;font-weight:700;font-size:14px;min-height:44px;display:flex;align-items:center}
+
+  .empty{text-align:center;padding:44px 20px;color:var(--mute)}
+  footer{max-width:1240px;margin:0 auto;padding:6px 16px 90px;color:var(--mute);font-size:12.5px}
+
+  /* ---------- mobile tabs ---------- */
+  nav.tabs{display:none}
+  @media(max-width:480px){
+    header.top{gap:8px;padding:12px 12px 4px} .brand{font-size:19px;gap:8px} .brand .mark{width:30px;height:30px}
+    button.icon{min-width:44px} .chip{font-size:12px;padding:3px 10px} main{padding-inline:12px}
+  }
+  @media(max-width:999px){
+    body.has-ws nav.tabs{display:grid;grid-template-columns:repeat(3,1fr);position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);
+      border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom));gap:6px}
+    body.has-ws nav.tabs button{background:transparent;color:var(--mute);flex-direction:column;gap:2px;font-size:12px;min-height:52px;border-radius:12px}
+    body.has-ws nav.tabs button[aria-selected="true"]{color:var(--brand);background:var(--brand-soft)}
+    body[data-tab="plan"] [data-pane="map"],body[data-tab="plan"] [data-pane="assistant"],
+    body[data-tab="map"] [data-pane="plan"],body[data-tab="map"] [data-pane="assistant"],
+    body[data-tab="assistant"] [data-pane="plan"],body[data-tab="assistant"] [data-pane="map"]{display:none}
+    .stop{grid-template-columns:62px 1fr;padding:12px} .leg{margin-left:74px} #map{height:62vh}
   }
 </style>
 </head>
-<body>
-
-<div id="replayBanner" role="alert"><div class="inner">▶ REPLAY — recorded run, not a live agent run</div></div>
+<body data-tab="plan">
+<a class="skip" href="#main">Skip to content</a>
+<div id="replayBanner" role="alert"><div class="inner">REPLAY — recorded run, not a live agent run</div></div>
 
 <header class="top">
-  <div>
-    <div class="logo">Side<span class="q">Quest</span></div>
-    <p class="tagline">Turn free time into a checked plan.</p>
-  </div>
+  <div class="brand"><span class="mark" id="markIc"></span><span>Side<span class="q">Quest</span></span></div>
   <div class="spacer"></div>
-  <span class="chip live" id="modeChip">● live</span>
+  <span class="chip ok" id="modeChip">Live</span>
+  <button class="icon ghost hide" id="newBtn" aria-label="Start a new plan" title="New plan"></button>
+  <button class="icon ghost" id="themeBtn" aria-label="Switch colour theme" title="Switch theme"></button>
 </header>
 
-<main>
-  <!-- ============ LEFT: input ============ -->
-  <aside>
-    <section class="card" id="formCard">
-      <h1>Plan an outing</h1>
-      <p class="sub">Tell us what you're in the mood for. The planner researches real places near you and checks the logistics.</p>
+<main id="main">
+  <!-- ============ compose ============ -->
+  <section id="compose" class="compose">
+    <div class="hero">
+      <h1>Turn free time into a <span class="q">checked</span> plan.</h1>
+      <p>Tell SideQuest what you feel like doing. It finds real places near you, checks hours, routes and your budget, and tells you what it could not verify.</p>
+      <ul class="points" id="points"></ul>
+    </div>
 
-      <div id="loc" class="loc bad" role="status">
-        <span class="dot"></span>
-        <div><strong>Location required.</strong><small>We need your position to find places nearby and plan the route home.</small></div>
-      </div>
-      <button id="locBtn" class="secondary" style="margin-top:10px;width:100%">📍 Share my location</button>
+    <form class="card" id="formCard" novalidate>
+      <h2 class="big">Plan an outing</h2>
+      <p class="sub">Your location is required: it is how we find places and plan the way back.</p>
+      <div id="loc" class="loc bad" role="status"><span class="dot"></span><div><strong>Location required.</strong><small>We need your position to find places nearby.</small></div></div>
+      <button type="button" id="locBtn" class="secondary" style="margin-top:10px;width:100%"></button>
 
       <label for="req">What do you feel like doing?</label>
-      <textarea id="req">Some food and a short walk outside, then back here.</textarea>
+      <textarea id="req" maxlength="500" aria-describedby="reqHelp reqErr">Coffee, then a riverside or park walk, then lunch under $20, then a museum or gallery. About 45 minutes each, walks under 15 minutes, back to start.</textarea>
+      <p class="help" id="reqHelp"><span id="reqCount">0</span>/500 characters</p>
+      <p class="field-err hide" id="reqErr" role="alert"></p>
 
-      <div class="row">
-        <div>
-          <label for="mins">Time available</label>
-          <select id="mins">
-            <option value="60">1 hour</option>
-            <option value="90">1.5 hours</option>
-            <option value="120" selected>2 hours</option>
-            <option value="180">3 hours</option>
-            <option value="240">4 hours</option>
-          </select>
-        </div>
-        <div>
-          <label for="mode">Getting around</label>
-          <select id="mode">
-            <option value="walk">🚶 Walk</option>
-            <option value="bike">🚲 Bike</option>
-            <option value="car">🚗 Car (I'm driving)</option>
-          </select>
-        </div>
+      <div class="row2">
+        <div><label for="mins">Time available</label>
+          <select id="mins"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option>
+            <option value="180">3 hours</option><option value="240" selected>4 hours</option><option value="360">6 hours</option></select></div>
+        <div><label for="mode">Getting around</label>
+          <select id="mode"><option value="walk">Walk</option><option value="bike">Bike</option><option value="car">Car (I'm driving)</option></select></div>
       </div>
-
-      <div class="row">
-        <div>
-          <label for="budget">Budget (USD)</label>
-          <input id="budget" type="number" min="0" step="1" placeholder="e.g. 30">
-        </div>
-        <div>
-          <label for="nolimit">&nbsp;</label>
-          <label style="margin:0;display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:400">
-            <input id="nolimit" type="checkbox" style="width:auto"> No budget limit
-          </label>
-        </div>
+      <div class="row2">
+        <div><label for="budget">Budget (USD)</label><input id="budget" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 40"></div>
+        <div><span class="lbl">&nbsp;</span><label class="check"><input id="nolimit" type="checkbox"> No budget limit</label></div>
       </div>
-
-      <label for="data">Places data</label>
-      <select id="data">
-        <option value="live">Live — real places near me (OpenStreetMap)</option>
-        <option value="demo">Demo — invented venues (for testing)</option>
-      </select>
-
-      <button id="go" disabled>Plan my outing</button>
-      <p id="msg" role="status"></p>
-    </section>
-
-    <section class="card hide" id="replayCard">
-      <h1>▶ Replay mode</h1>
-      <p class="sub" id="replayMeta">Loading recorded run…</p>
-      <p class="sub" id="replayReq" style="font-style:italic"></p>
-      <p class="sub">Live planning is disabled in replay mode. Remove <code>?replay=1</code> from the URL for the live app.</p>
-      <p id="replayMsg" class="sub"></p>
-    </section>
-  </aside>
-
-  <!-- ============ RIGHT: progress + result ============ -->
-  <section>
-    <div class="card hide" id="progressCard">
-      <div class="feedhead">
-        <div class="spinner" id="spinner"></div>
-        <h2 style="margin:0">Agent at work</h2>
+      <div class="row2">
+        <div><label for="rain">Rain tolerance</label>
+          <select id="rain"><option value="">Don't mind rain</option><option value="60">Avoid likely rain (over 60%)</option>
+            <option value="40">Avoid possible rain (over 40%)</option><option value="20">Avoid any real chance (over 20%)</option></select></div>
+        <div><label for="data">Places data</label>
+          <select id="data"><option value="live">Live: real places (OpenStreetMap)</option><option value="demo">Demo: invented venues</option></select></div>
       </div>
-      <p class="sub" style="margin-top:0">Real tool calls, as they happen. Nothing here is scripted.</p>
-      <ol id="events" aria-live="polite"></ol>
-    </div>
+      <button type="submit" id="go" disabled>Plan my outing</button>
+      <p id="msg" role="status" aria-live="polite"></p>
+    </form>
+  </section>
 
-    <div class="card empty" id="emptyCard">
-      <div class="big">🧭</div>
-      <h2>No plan yet</h2>
-      <p class="sub" style="max-width:340px;margin:0 auto">Share your location, describe your outing, and the agent will research places, check hours and routes, and build you a timeline.</p>
-    </div>
+  <!-- ============ working ============ -->
+  <section id="working" class="card hide" aria-live="polite">
+    <div class="feedhead"><div class="spinner" id="spinner"></div><h2 style="margin:0" id="workTitle">The agent is working</h2></div>
+    <p class="sub">Real tool calls as they happen. Nothing here is scripted.</p>
+    <ol class="feed" id="events"></ol>
+    <div class="skeleton" id="skeleton"><i></i><i></i></div>
+  </section>
 
-    <div class="card hide" id="resultCard">
-      <h2 id="rTitle">Your plan</h2>
-      <div class="badges" id="rBadges"></div>
-      <p class="expl" id="rExpl"></p>
-      <p class="meta" id="rMeta"></p>
-      <!-- REPLAN EXTENSION POINT: a future change-summary (diff) view renders here,
-           above the timeline, when replan support is added. -->
-      <div id="diffSlot"></div>
-      <div class="timeline" id="stops"></div>
-      <div class="issues" id="issues"></div>
-      <div class="conflict hide" id="conflict"></div>
-      <div class="opts hide" id="opts"></div>
-      <div class="notes" id="notes"></div>
-      <div id="mapwrap">
-        <div id="map"></div>
-        <div class="mapnote hide" id="mapNote"></div>
+  <!-- ============ workspace ============ -->
+  <section id="workspace" class="hide">
+    <div class="tripbar" id="tripbar"></div>
+    <div class="ws">
+      <div class="col" data-pane="plan" id="colPlan">
+        <div id="notice"></div>
+        <div id="clarify"></div>
+        <div id="diffCard"></div>
+        <article class="card" id="planCard">
+          <h2 class="big" id="pTitle">Your plan</h2>
+          <div class="badges" id="pBadges"></div>
+          <p class="expl" id="pExpl"></p>
+          <div id="spend"></div>
+          <p class="meta" id="pMeta"></p>
+          <ol class="timeline" id="timeline"></ol>
+          <div class="issues" id="issues"></div>
+          <div class="notes" id="notes"></div>
+        </article>
       </div>
-      <div id="questPanel" class="hide">
-        <p id="questNext"></p>
-        <p id="questInfo"></p>
-        <div class="btnrow">
-          <button id="questBtn">▶ Start Quest</button>
-          <button id="arrivedBtn" class="secondary hide">✓ I've arrived</button>
-        </div>
-        <div class="privacy">🔒 <span><strong>Private by design:</strong> live tracking runs entirely in your browser to measure distance to the next stop. Your location is <strong>not sent anywhere</strong>.</span></div>
-      </div>
+      <aside class="side">
+        <section class="card" data-pane="map" id="mapCard">
+          <h2>Map</h2>
+          <div id="map" role="region" aria-label="Map of your stops"></div>
+          <div class="mapnote hide" id="mapNote"></div>
+          <div class="quest hide" id="quest">
+            <p class="nextline" id="questNext"></p>
+            <p class="sub" id="questInfo"></p>
+            <div class="actions"><button id="questBtn"></button><button id="arrivedBtn" class="secondary hide"></button></div>
+            <div class="privacy" id="privacy"></div>
+          </div>
+        </section>
+        <details class="card assist" data-pane="assistant" id="assist" open>
+          <summary><span id="assistIc"></span>Assistant<span class="chev" id="chevIc"></span></summary>
+          <div class="inner">
+            <p class="sub" id="ctlHint"></p>
+            <div class="ctl"><label class="lbl" for="lateSel">I'm running late</label>
+              <div class="line"><select id="lateSel"><option value="10">10 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option></select>
+              <button class="small" id="lateBtn">Replan</button></div></div>
+            <div class="ctl"><label class="lbl" for="timeSel">Change total time</label>
+              <div class="line"><select id="timeSel"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option>
+                <option value="180">3 hours</option><option value="240">4 hours</option><option value="360">6 hours</option></select>
+              <button class="small" id="timeBtn">Replan</button></div></div>
+            <div class="ctl"><label class="lbl" for="budSel">Change budget (USD)</label>
+              <div class="line"><input id="budSel" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 30"><button class="small" id="budBtn">Replan</button></div>
+              <label class="check"><input id="budNo" type="checkbox"> No budget limit</label></div>
+            <details class="hist"><summary>What the agent did</summary><ol class="feed" id="feedHist"></ol></details>
+          </div>
+        </details>
+      </aside>
     </div>
   </section>
 </main>
 
+<nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="plan" aria-selected="true" id="tabPlan"></button>
+  <button role="tab" data-tab="map" aria-selected="false" id="tabMap"></button>
+  <button role="tab" data-tab="assistant" aria-selected="false" id="tabAssist"></button>
+</nav>
 <footer>SideQuest hackathon MVP · plans are researched suggestions, not bookings · route times are straight-line estimates</footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 'use strict';
-/* =====================================================================
-   SideQuest MVP front-end. Single file (the FastAPI app serves only
-   index.html). Talks to: POST /api/plans, GET /api/runs/{id}, GET /api/health.
-   In ?replay=1 mode it instead plays fixtures/demo/replay-run.json.
-   ===================================================================== */
+/* SideQuest front-end (single file; the FastAPI app serves only this page).
+   Talks to: POST /api/plans, GET /api/runs/{id}, POST /api/runs/{id}/answer,
+   POST /api/trips/{id}/replan, POST /api/trips/{id}/decision. In ?replay=1 it plays
+   fixtures/demo/replay-run.json instead. All dynamic text is set with textContent / text nodes. */
 const $ = id => document.getElementById(id);
 const REPLAY = new URLSearchParams(location.search).get('replay') === '1';
 const REPLAY_PATHS = ['fixtures/demo/replay-run.json', '../fixtures/demo/replay-run.json'];
+const S = { pos: null, tripId: null, current: null, view: null, runId: null, busy: false, replay: false,
+            events: [], lastSeq: 0, pollTimer: null, nextIdx: 0, watchId: null, focus: -1 };
+let map = null, layer = null, markers = [], meMarker = null;
 
-let pos = null;            // geolocation coords (live mode)
-let plan = null;           // current proposal object
-let planOrigin = null;     // {lat, lon}
-let map = null, layer = null, meMarker = null;
-let watchId = null, nextIdx = 0;
-let pollTimer = null, lastSeq = 0;
-
-function el(tag, cls, text) {
+/* ---------- icons: constant markup only, never data ---------- */
+const ICONS = {
+  compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
+  pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  unlock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+  swap: '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  alert: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  map: '<path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/>',
+  list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+  chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
+  sun: '<circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  refresh: '<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  play: '<polygon points="5 3 19 12 5 21 5 3"/>',
+  nav: '<polygon points="3 11 22 2 13 21 11 13 3 11"/>',
+  wallet: '<path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  rain: '<path d="M16 13v8"/><path d="M8 13v8"/><path d="M12 15v8"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
+  route: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>'
+};
+function ic(name) {
+  const doc = new DOMParser().parseFromString(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || '') + '</svg>', 'image/svg+xml');
+  const s = document.importNode(doc.documentElement, true);
+  s.setAttribute('class', 'ic');
+  return s;
+}
+function h(tag, attrs, ...kids) {
   const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c);
   return e;
 }
-function show(id) { $(id).classList.remove('hide'); }
-function hide(id) { $(id).classList.add('hide'); }
+const show = id => $(id).classList.remove('hide');
+const hide = id => $(id).classList.add('hide');
+const clear = id => { $(id).replaceChildren(); return $(id); };
+function put(id, ...kids) { const n = clear(id); n.append(...kids.flat().filter(Boolean)); return n; }
+function iconText(name, text) { return [ic(name), h('span', null, text)]; }
 
-/* ---------------- location (live mode) ---------------- */
-function setLoc(html, cls) {
-  $('loc').innerHTML = '<span class="dot"></span><div>' + html + '</div>';
-  $('loc').className = 'loc ' + cls;
+/* ---------- theme ---------- */
+function applyTheme(t) {
+  if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+  const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  put('themeBtn', ic(dark ? 'sun' : 'moon'));
+}
+function initTheme() {
+  let t = null; try { t = localStorage.getItem('sq-theme'); } catch (e) {}
+  applyTheme(t === 'dark' || t === 'light' ? t : null);
+  $('themeBtn').onclick = () => {
+    const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    applyTheme(next); try { localStorage.setItem('sq-theme', next); } catch (e) {}
+  };
+}
+
+/* ---------- location (required) ---------- */
+function setLoc(title, small, cls) {
+  const box = clear('loc'); box.className = 'loc ' + cls;
+  box.append(h('span', { class: 'dot' }), h('div', null, h('strong', null, title), h('small', null, small)));
 }
 function getLocation() {
-  if (!navigator.geolocation) {
-    setLoc('<strong>Location unavailable.</strong><small>This browser cannot share location.</small>', 'bad');
-    return;
-  }
-  setLoc('<strong>Asking for your location…</strong><small>Your browser will ask for permission.</small>', '');
+  if (!navigator.geolocation) { setLoc('Location unavailable.', 'This browser cannot share location.', 'bad'); return; }
+  setLoc('Asking for your location…', 'Your browser will ask for permission.', '');
   navigator.geolocation.getCurrentPosition(p => {
-    pos = p.coords;
-    setLoc('<strong>Location ready.</strong><small>' +
-      pos.latitude.toFixed(4) + ', ' + pos.longitude.toFixed(4) +
-      ' · accurate to ±' + Math.round(pos.accuracy) + ' m</small>', 'ok');
+    S.pos = p.coords;
+    setLoc('Location ready.', p.coords.latitude.toFixed(4) + ', ' + p.coords.longitude.toFixed(4) + ' · accurate to ±' + Math.round(p.coords.accuracy) + ' m', 'ok');
     $('go').disabled = false;
   }, e => {
-    pos = null; $('go').disabled = true;
-    const why = e.code === 1
-      ? 'Permission was denied — allow location for this site and try again.'
-      : (e.message || 'Could not determine your position.');
-    setLoc('<strong>Location is required to plan.</strong><small>' + why + '</small>', 'bad');
+    S.pos = null; $('go').disabled = true;
+    setLoc('Location is required to plan.', e.code === 1 ? 'Permission was denied. Allow location for this site, then try again.' : (e.message || 'Could not determine your position.'), 'bad');
   }, { enableHighAccuracy: true, timeout: 15000 });
 }
 
-/* ---------------- planning (live mode) ---------------- */
+/* ---------- API helper ---------- */
+async function api(path, body) {
+  let r;
+  try {
+    r = await fetch(path, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch (e) { throw new Error("Couldn't reach the server. Make sure it is running, then try again."); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const d = typeof j.detail === 'string' ? j.detail : Array.isArray(j.detail) ? 'Check the form values.' : 'The server rejected the request.';
+    const e = new Error(r.status === 429 ? 'The planner is busy with another run. Wait for it to finish, then try again.'
+      : r.status === 503 ? 'The AI planner is not connected (no model configured on the server).' : d);
+    e.status = r.status; throw e;
+  }
+  return j;
+}
+
+/* ---------- planning flow ---------- */
 function readForm() {
-  return {
-    request: $('req').value.trim(),
-    lat: pos.latitude, lon: pos.longitude,
-    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    minutes: +$('mins').value || 120,
-    budget_dollars: $('budget').value === '' ? null : +$('budget').value,
-    no_budget_limit: $('nolimit').checked,
-    mode: $('mode').value,
-    data: $('data').value
-  };
+  const rain = $('rain').value;
+  return { request: $('req').value.trim(), lat: S.pos.latitude, lon: S.pos.longitude,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone, minutes: +$('mins').value || 120,
+    budget_dollars: $('budget').value === '' ? null : +$('budget').value, no_budget_limit: $('nolimit').checked,
+    mode: $('mode').value, data: $('data').value, avoid_rain_pct: rain === '' ? null : +rain };
 }
+function formMsg(text, cls) { const m = $('msg'); m.textContent = text || ''; m.className = cls || ''; }
+$('formCard').addEventListener('submit', ev => { ev.preventDefault(); startPlan(); });
 
-function fail(text) {
-  $('msg').textContent = text;
-  $('msg').className = 'err';
-  $('go').disabled = !pos;
-  hide('progressCard');
-}
-
-function startPlan() {
-  if (!pos) { getLocation(); return; }
-  if ($('req').value.trim().length < 3) { fail('Describe your outing in a few words first.'); return; }
+async function startPlan() {
+  if (!S.pos) { getLocation(); return; }
+  const len = $('req').value.trim().length;
+  const err = $('reqErr');
+  if (len < 3) { err.textContent = 'Describe your outing in a few words first.'; err.classList.remove('hide'); $('req').focus(); return; }
+  err.classList.add('hide'); formMsg('');
   $('go').disabled = true;
-  $('msg').textContent = ''; $('msg').className = '';
-  resetRunUI();
-  stopQuest();
-  show('progressCard'); hide('emptyCard'); hide('resultCard');
-  fetch('/api/plans', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(readForm())
-  }).then(async r => {
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      if (r.status === 429) fail('The planner is busy with another run right now. Wait for it to finish, then try again.');
-      else if (r.status === 503) fail('The AI planner is not connected (no model configured on the server). Live planning is unavailable right now.');
-      else if (r.status === 422) fail('Request rejected: ' + (j.detail || 'check the form values.'));
-      else fail(typeof j.detail === 'string' ? j.detail : 'The server rejected the request.');
-      return;
-    }
-    poll(j.run_id);
-  }).catch(() => fail("Couldn't reach the server. Make sure it's running, then try again."));
+  S.current = null; S.view = null; S.tripId = null; stopQuest();
+  beginRun('The agent is working');
+  try {
+    const j = await api('/api/plans', readForm());
+    S.tripId = j.trip_id; track(j.run_id);
+  } catch (e) { endRun(); showCompose(); formMsg(e.message, 'field-err'); $('go').disabled = !S.pos; }
 }
 
-function resetRunUI() {
-  if (pollTimer) clearTimeout(pollTimer);
-  pollTimer = null; lastSeq = 0;
-  $('events').replaceChildren();
-  $('spinner').style.visibility = 'visible';
+function beginRun(title) {
+  S.busy = true; S.events = []; S.lastSeq = 0; clear('events');
+  $('workTitle').textContent = title; show('working'); show('skeleton'); show('spinner');
+  hide('compose'); if (S.view || S.current) show('workspace'); else hide('workspace');
+  if (S.current || S.view) hide('skeleton');
+  $('working').scrollIntoView({ block: 'nearest' });
+  refreshControls();
 }
+function endRun() { S.busy = false; hide('working'); refreshControls(); }
 
-function poll(id) {
-  fetch('/api/runs/' + id).then(r => {
-    if (r.status === 404) throw new Error('gone');
-    return r.json();
-  }).then(j => {
+function track(runId) {
+  S.runId = runId;
+  api('/api/runs/' + runId).then(j => {
     appendEvents(j.events || []);
-    if (!j.done) { pollTimer = setTimeout(() => poll(id), 1500); return; }
-    $('spinner').style.visibility = 'hidden';
-    $('go').disabled = !pos;
-    if (j.error) { fail('The run failed: ' + j.error); return; }
-    if (!j.result) { fail('The run finished without a result. Try again.'); return; }
-    renderResult(j.result, { replay: false });
-  }).catch(e => {
-    fail(e.message === 'gone'
-      ? 'Run not found — the server may have restarted. Try planning again.'
-      : "Lost contact with the server while waiting for the plan.");
-  });
+    if (!j.done) { S.pollTimer = setTimeout(() => track(runId), 1500); return; }
+    endRun();
+    if (j.error) { runFailed('The run failed: ' + j.error); return; }
+    if (!j.result) { runFailed('The run finished without a result. Try again.'); return; }
+    showResult(j.result, {});
+  }).catch(e => { endRun(); runFailed(e.message); });
+}
+function runFailed(text) {
+  if (S.current || S.view) { show('workspace'); put('notice', notice('err', 'alert', text)); }
+  else { showCompose(); formMsg(text, 'field-err'); $('go').disabled = !S.pos; }
 }
 
-/* ---------------- activity feed (real events only) ---------------- */
-const KIND_ICON = {
-  tool_call: '🔧', tool_result: '↳', final: '🏁',
-  limit: '⏱', error: '⚠️', cancelled: '⏹'
-};
+const KIND = { tool_call: 'Searching and checking', tool_result: '', final: 'Done', limit: 'Stopped', error: 'Problem', cancelled: 'Cancelled' };
 function appendEvents(events) {
-  const list = $('events');
-  let added = false;
   for (const e of events) {
-    if (e.seq <= lastSeq) continue;
-    lastSeq = e.seq;
-    const li = el('li', e.kind || '');
-    li.append(el('span', 'ic', KIND_ICON[e.kind] || '•'));
-    li.append(el('span', '', e.summary || ''));
-    list.append(li);
-    added = true;
+    if (e.seq <= S.lastSeq) continue;
+    S.lastSeq = e.seq; S.events.push(e);
+    if (e.kind === 'tool_call') continue;  // the result line says what happened
+    $('events').append(h('li', { class: e.kind || '' }, h('span', null, e.summary || '')));
   }
-  if (added) list.scrollTop = list.scrollHeight;
+  const l = $('events'); l.scrollTop = l.scrollHeight;
 }
 
-/* ---------------- result rendering (shared live + replay path) ---------------- */
-function renderResult(res, opts) {
-  hide('progressCard'); hide('emptyCard'); show('resultCard');
-  plan = res.proposal || null; planOrigin = res.origin || null; nextIdx = 0;
-  $('stops').replaceChildren(); $('issues').replaceChildren();
-  $('notes').replaceChildren(); $('rBadges').replaceChildren();
-  $('opts').replaceChildren(); $('opts').classList.add('hide');
-  $('conflict').classList.add('hide');
-  $('diffSlot').replaceChildren();
-  resetQuestPanel();
+/* ---------- results ---------- */
+function notice(kind, icon, text) { return h('div', { class: 'notice ' + kind, role: kind === 'err' ? 'alert' : 'status' }, ic(icon), h('span', null, text)); }
+function showCompose() { hide('workspace'); hide('working'); show('compose'); hide('newBtn'); document.body.classList.remove('has-ws'); }
 
-  if (!plan) {
-    renderNonProposal(res);
-    drawMapSafe(res.origin, []);
-    return;
+function showResult(res, opts) {
+  S.view = res; if (res.trip_id) S.tripId = res.trip_id;
+  if (res.proposal && !res.awaiting_decision) S.current = res;
+  S.replay = !!opts.replay; S.nextIdx = 0; S.focus = -1;
+  hide('compose'); hide('working'); show('workspace'); show('newBtn');
+  document.body.classList.add('has-ws');
+  const shown = res.proposal ? res : (S.current || res);
+  renderTripBar(res, shown); clear('notice'); renderClarify(res); renderDiff(res);
+  renderPlan(res, shown); renderMap(shown); renderQuest(shown, res); refreshControls();
+  const hist = clear('feedHist');
+  for (const e of S.events) if (e.kind !== 'tool_call') hist.append(h('li', { class: e.kind || '' }, h('span', null, e.summary || '')));
+  if (!res.proposal) {
+    const msgs = { limit_reached: 'The planner ran out of time or steps before saving a plan. Try a simpler request.',
+      cancelled: 'The run was cancelled.', model_error: 'The AI planner had an error. Try again in a moment.' };
+    if (!res.clarification) put('notice', notice('warn', 'alert', res.message || msgs[res.status] || 'The planner did not produce a plan.'));
   }
-  $('rTitle').textContent = opts.replay ? 'Your plan (replay)' : 'Your plan';
-  const overall = plan.overall;
-  const label = { checked: '✓ Checked', provisional: '? Provisional', failed: '✗ Failed' }[overall] || overall;
-  const sub = {
-    checked: 'all checks passed',
-    provisional: 'some facts unknown — review before going',
-    failed: 'does not satisfy the constraints'
-  }[overall] || '';
-  $('rBadges').append(el('span', 'badge b-' + overall, label + ' · ' + plan.checks_passed + ' checks passed · ' + sub));
-  if (res.data && res.data.synthetic) {
-    $('rBadges').append(el('span', 'badge b-demo', 'DEMO DATA — invented venues'));
-  } else if (res.data && res.data.places) {
-    const c = el('span', 'chip', 'Live data');
-    c.title = res.data.places;
-    $('rBadges').append(c);
-  }
-  $('rExpl').textContent = plan.explanation || '';
-  const metaBits = [];
-  if (typeof res.tool_calls === 'number') metaBits.push(res.tool_calls + ' tool calls');
-  if (typeof res.tokens === 'number') metaBits.push(res.tokens.toLocaleString() + ' tokens');
-  $('rMeta').textContent = metaBits.join(' · ');
-
-  // REPLAN EXTENSION POINT: when replan support lands, render the change-summary
-  // (diff) view into #diffSlot here, above the timeline. opts.diff is reserved.
-
-  renderTimeline(plan);
-  for (const i of plan.issues || []) {
-    const d = el('div', 'issue ' + i.status);
-    d.append(el('span', 'mk', i.status === 'fail' ? '✗' : '?'));
-    d.append(el('span', '', i.message));
-    $('issues').append(d);
-  }
-  for (const n of plan.notes || []) {
-    const d = el('div', 'note');
-    d.append(el('span', '', 'ⓘ'));
-    d.append(el('span', '', n));
-    $('notes').append(d);
-  }
-  drawMapSafe(res.origin, plan.blocks || []);
-  show('questPanel');
-  updateQuestHeadline();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderNonProposal(res) {
-  if (res.status === 'needs_clarification' && res.clarification) {
-    $('rTitle').textContent = 'One question first';
-    $('rExpl').textContent = res.clarification.question || 'The planner needs a bit more to go on.';
-    const opts = res.clarification.options || [];
-    if (opts.length) {
-      $('opts').classList.remove('hide');
-      for (const o of opts) {
-        const b = el('button', 'ghost', o);
-        b.onclick = () => { $('req').value = o; $('req').focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-        $('opts').append(b);
-      }
-      const hint = el('p', 'sub', 'Tap an option to use it as your request, then plan again.');
-      hint.style.marginTop = '10px';
-      $('opts').append(hint);
-    }
-  } else {
-    $('rTitle').textContent = 'No plan this time';
-    $('rExpl').textContent = res.message ||
-      ({ limit_reached: 'The planner ran out of time or steps before saving a plan. Try a simpler request.',
-         cancelled: 'The run was cancelled.',
-         model_error: 'The AI planner errored. Try again in a moment.' }[res.status] ||
-       'The planner did not produce a plan.');
+function renderTripBar(res, shown) {
+  const c = res.constraints || shown.constraints, bar = clear('tripbar');
+  const chip = (cls, icon, text) => h('span', { class: 'chip ' + cls }, ic(icon), text);
+  if (c) {
+    const hrs = c.minutes >= 60 ? (c.minutes / 60).toFixed(c.minutes % 60 ? 1 : 0) + ' h' : c.minutes + ' min';
+    bar.append(chip('', 'clock', c.window + ' · ' + hrs), chip('', 'route', c.mode),
+      chip('', 'wallet', c.no_budget_limit ? 'No budget limit' : c.budget_dollars == null ? 'Budget not set' : '$' + c.budget_dollars + ' budget'),
+      chip('', 'rain', c.avoid_rain_pct == null ? "Rain: don't mind" : 'Avoid rain over ' + c.avoid_rain_pct + '%'));
   }
-  if (res.conflict && res.conflict.message) {
-    const c = $('conflict');
-    c.classList.remove('hide');
-    c.textContent = 'Why: ' + res.conflict.message;
-  }
-  $('rBadges').replaceChildren();
-  $('rMeta').textContent = '';
+  const w = res.weather || shown.weather;
+  if (w) bar.append(w.available ? chip('brand', 'rain', 'Forecast rain chance ' + (w.min_pct === w.max_pct ? w.max_pct + '%' : w.min_pct + '–' + w.max_pct + '%'))
+                                : chip('warn', 'rain', 'Forecast unavailable for this time'));
+  const d = (shown.data || res.data);
+  if (d) bar.append(d.synthetic ? chip('warn', 'alert', 'DEMO DATA: invented venues') : chip('ok', 'shield', 'Live data'));
+  const mc = $('modeChip');
+  if (S.replay) { mc.textContent = 'Replay'; mc.className = 'chip warn'; }
+  else if (d) { mc.textContent = d.synthetic ? 'Demo data' : 'Live'; mc.className = 'chip ' + (d.synthetic ? 'warn' : 'ok'); }
 }
 
-/* ---------------- timeline ---------------- */
-const MODE_ICON = { walk: '🚶', bike: '🚲', car: '🚗' };
-function renderTimeline(p) {
-  // NOTE (API): result_json() exposes leg endpoints as *place* IDs
-  // (leg.from/to), but blocks only carry their stable *block* id — no
-  // place_id to join on. The planner emits legs in itinerary order
-  // (legs[0] = origin -> first stop, legs[i+1] connects blocks[i]->blocks[i+1]),
-  // so positional matching is used. If the API later includes place_id per
-  // block, prefer an id-based join here.
-  const box = $('stops');
-  const blocks = p.blocks || [], legs = p.legs || [];
-  const legDiv = (leg, prefix) => {
-    const ld = el('div', 'leg');
-    if (!leg) { ld.append(el('span', 'line', '')); return ld; }
-    if (prefix) ld.append(el('span', '', prefix));
-    ld.append(el('span', '', (MODE_ICON[leg.mode] || '→') + ' ' + (leg.mode || 'travel')));
-    ld.append(el('span', 'line', ''));
-    ld.append(el('span', '', 'leave ' + leg.depart + ' · there by ' + leg.latest_arrival));
-    return ld;
+function renderClarify(res) {
+  const box = clear('clarify');
+  const q = res.clarification;
+  if (!q) return;
+  const err = h('p', { class: 'field-err hide', role: 'alert', id: 'askErr' });
+  const input = h('input', { type: 'text', id: 'askText', maxlength: '300', placeholder: 'Type a different answer…', 'aria-label': 'Your own answer' });
+  const buttons = [];
+  const send = async (payload, btn) => {
+    buttons.forEach(b => b.disabled = true); input.disabled = true; err.classList.add('hide');
+    try {
+      const j = await api('/api/runs/' + S.runId + '/answer', payload);
+      beginRun('Applying your answer'); track(j.run_id);
+    } catch (e) { buttons.forEach(b => b.disabled = false); input.disabled = false; err.textContent = e.message; err.classList.remove('hide'); }
   };
-  blocks.forEach((b, i) => {
-    if (i === 0 && legs[0]) box.append(legDiv(legs[0], 'from your start'));
-    const s = el('div', 'stop');
-    s.id = 'stop' + i;
-    s.append(el('div', 'time', b.start + '–' + b.end));
-    const d = el('div');
-    d.append(el('h3', '', b.name));
-    d.append(el('div', 'costline', b.cost || ''));
-    if (b.shortened) d.append(el('span', 'flag', '⏱ shortened to fit opening hours'));
-    s.append(d);
-    box.append(s);
-    if (i < blocks.length - 1) box.append(legDiv(legs[i + 1], null));
-  });
+  const list = h('div', { class: 'choices' });
+  for (const c of q.choices || []) {
+    const b = h('button', { type: 'button', onclick: () => send({ choice: c.index }, b) }, c.kind === 'text' ? ic('chat') : ic('check'), h('span', null, c.label));
+    buttons.push(b); list.append(b);
+  }
+  const sendBtn = h('button', { type: 'button', class: 'secondary', onclick: () => { const t = input.value.trim(); if (!t) { err.textContent = 'Type an answer or pick an option.'; err.classList.remove('hide'); input.focus(); return; } send({ text: t }, sendBtn); } }, 'Send');
+  buttons.push(sendBtn);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendBtn.click(); } });
+  const card = h('section', { class: 'card ask', 'aria-labelledby': 'askTitle' },
+    h('h2', { id: 'askTitle' }, ic('help'), 'One question first'), h('p', { class: 'expl' }, q.question || 'The planner needs a bit more to go on.'),
+    list, h('label', { class: 'lbl', for: 'askText' }, 'Or answer in your own words'), h('div', { class: 'answer-row' }, input, sendBtn), err);
+  if (res.conflict && res.conflict.message) card.append(h('div', { class: 'conflict' }, 'Why: ' + res.conflict.message));
+  box.append(card);
 }
 
-/* ---------------- map (must never break the timeline) ---------------- */
-function drawMapSafe(origin, blocks) {
+function renderDiff(res) {
+  const box = clear('diffCard');
+  if (!res.awaiting_decision || !res.diff) return;
+  const d = res.diff;
+  const li = (cls, label, items, fmt) => items.length ? items.map(i => h('li', null, h('span', { class: 'mini ' + cls }, label), h('span', null, fmt(i)))) : [];
+  const err = h('p', { class: 'field-err hide', role: 'alert' });
+  const decide = async which => {
+    box.querySelectorAll('button').forEach(b => b.disabled = true);
+    try {
+      const j = await api('/api/trips/' + S.tripId + '/decision', { decision: which });
+      S.current = null; showResult(j.result, {});
+    } catch (e) { box.querySelectorAll('button').forEach(b => b.disabled = false); err.textContent = e.message; err.classList.remove('hide'); }
+  };
+  box.append(h('section', { class: 'card diff', 'aria-labelledby': 'diffTitle' },
+    h('h2', { id: 'diffTitle' }, ic('refresh'), 'Proposed change'), h('p', { class: 'sub' }, 'Review before it replaces your saved plan: ' + d.summary + '.'),
+    h('ul', { class: 'difflist' },
+      li('new', 'Added', d.added, i => i.name + ' · ' + i.when), li('moved', 'Moved', d.moved, i => i.name + ': ' + i.from + ' → ' + i.to),
+      li('warn', 'Removed', d.removed, i => i.name + ' · ' + i.when),
+      d.unchanged.length ? h('li', null, h('span', { class: 'mini' }, 'Unchanged'), h('span', null, d.unchanged.length + ' stop' + (d.unchanged.length === 1 ? '' : 's'))) : null),
+    h('div', { class: 'decide' }, h('button', { type: 'button', onclick: () => decide('accept') }, ic('check'), 'Accept change'),
+      h('button', { type: 'button', class: 'ghost', onclick: () => decide('reject') }, 'Keep my current plan')), err));
+}
+
+function legsFor(blocks, legs) {
+  const ids = blocks.length && blocks.every(b => b.place_id);
+  const into = blocks.map((b, i) => ids ? legs.find(l => l.to === b.place_id) : legs[i]);
+  const last = ids ? legs.find(l => !blocks.some(b => b.place_id === l.to)) : legs[blocks.length];
+  return { into, last };
+}
+function legNode(leg, label) {
+  if (!leg) return null;
+  return h('li', { class: 'leg' }, ic('route'), h('span', null, (leg.mode || 'travel') + (label ? ' ' + label : '') + ' · leave ' + leg.depart + ', there by ' + leg.latest_arrival), h('span', { class: 'line' }));
+}
+function factChip(f) {
+  const names = { opening_hours: 'Hours', price: 'Price' };
+  if (!names[f.field]) return null;
+  const txt = { verified: 'verified', unverified: 'from map data', unknown: 'unknown' }[f.status] || f.status;
+  return h('span', { class: 'mini ' + (f.status === 'unknown' ? 'warn' : f.status === 'verified' ? 'ok' : '') }, names[f.field] + ': ' + txt);
+}
+
+function renderPlan(res, shown) {
+  const p = shown.proposal;
+  const cand = !!res.awaiting_decision;
+  clear('pBadges'); clear('timeline'); clear('issues'); clear('notes'); clear('spend');
+  if (!p) {
+    $('pTitle').textContent = 'No plan yet'; $('pExpl').textContent = res.clarification ? 'Answer the question above and the planner will continue.' : 'Nothing to show.';
+    $('pMeta').textContent = ''; return;
+  }
+  $('pTitle').textContent = S.replay ? 'Your plan (replay)' : cand ? 'Proposed plan' : 'Your plan';
+  const label = { checked: 'Checked', provisional: 'Provisional', failed: 'Not valid' }[p.overall] || p.overall;
+  const sub = { checked: 'all checks passed', provisional: 'some facts are unknown', failed: 'breaks a constraint' }[p.overall] || '';
+  put('pBadges', h('span', { class: 'badge b-' + p.overall }, ic(p.overall === 'checked' ? 'check' : p.overall === 'failed' ? 'alert' : 'help'), label + ' · ' + sub),
+    h('span', { class: 'badge b-info' }, p.checks_passed + ' checks passed'));
+  $('pExpl').textContent = p.explanation || '';
+  const bits = [];
+  if (typeof shown.tool_calls === 'number') bits.push(shown.tool_calls + ' tool calls');
+  if (typeof shown.tokens === 'number') bits.push(shown.tokens.toLocaleString() + ' tokens');
+  $('pMeta').textContent = bits.join(' · ');
+
+  const t = p.totals;
+  if (t) {
+    const range = t.low === t.high ? '$' + t.low.toFixed(0) : '$' + t.low.toFixed(0) + '–$' + t.high.toFixed(0);
+    const box = h('div', { class: 'spend' }, h('strong', null, 'Estimated spend: ' + range + (t.cap != null ? ' of $' + t.cap.toFixed(0) : '')),
+      t.has_unknown ? h('div', { class: 'help' }, 'Some prices are unknown, so the real total could be higher.') : null);
+    if (t.cap) {
+      const pct = Math.min(100, Math.round(t.high / t.cap * 100));
+      box.append(h('div', { class: 'bar', role: 'img', 'aria-label': pct + ' percent of budget at the high estimate' }, h('i', { class: t.high > t.cap ? 'over' : '', style: 'width:' + pct + '%' })));
+    }
+    put('spend', box);
+  }
+
+  const diff = res.diff || {}, newIds = new Set((diff.added || []).map(x => x.id)), movedIds = new Set((diff.moved || []).map(x => x.id));
+  const { into, last } = legsFor(p.blocks, p.legs || []);
+  const canEdit = canEditNow(res);
+  const tl = $('timeline');
+  p.blocks.forEach((b, i) => {
+    const lg = legNode(into[i], i === 0 ? 'from your start' : '');
+    if (lg) tl.append(lg);
+    const facts = (b.facts || []).map(factChip).filter(Boolean);
+    const chips = h('div', { class: 'chips' }, h('span', { class: 'mini' }, ic('wallet'), b.cost || ''), facts,
+      b.step_free === true ? h('span', { class: 'mini ok' }, 'Step-free') : b.step_free === false ? h('span', { class: 'mini warn' }, 'Not step-free') : null,
+      b.shortened ? h('span', { class: 'mini warn' }, ic('clock'), 'Shortened to fit hours') : null,
+      b.locked ? h('span', { class: 'mini moved' }, ic('lock'), 'Locked') : null,
+      newIds.has(b.id) ? h('span', { class: 'mini new' }, 'New') : null, movedIds.has(b.id) ? h('span', { class: 'mini moved' }, 'Moved') : null);
+    const acts = h('div', { class: 'actions' },
+      h('button', { class: 'icon', type: 'button', 'aria-pressed': b.locked ? 'true' : 'false', 'aria-label': (b.locked ? 'Unlock ' : 'Lock ') + b.name,
+        title: b.locked ? 'Unlock this stop' : 'Lock this stop in place', disabled: !canEdit, onclick: () => replan([{ type: b.locked ? 'unlock' : 'lock', block_id: b.id }]) }, ic(b.locked ? 'lock' : 'unlock')),
+      h('button', { class: 'small ghost', type: 'button', disabled: !canEdit, 'aria-label': 'Swap ' + b.name, onclick: () => replan([{ type: 'swap_stop', block_id: b.id }]) }, ic('swap'), 'Swap'),
+      h('button', { class: 'small danger', type: 'button', disabled: !canEdit, 'aria-label': 'Remove ' + b.name, onclick: () => replan([{ type: 'remove_stop', block_id: b.id }]) }, ic('trash'), 'Remove'),
+      b.lat != null ? h('button', { class: 'small ghost', type: 'button', 'aria-label': 'Show ' + b.name + ' on the map', onclick: () => focusStop(i, true) }, ic('pin'), 'Map') : null);
+    const dur = durationMin(b.start, b.end);
+    const card = h('li', { class: 'stop' + (b.locked ? ' locked' : ''), id: 'stop' + i, 'data-i': i },
+      h('div', { class: 'when' }, b.start, h('small', null, 'to ' + b.end + (dur ? ' · ' + dur + ' min' : ''))),
+      h('div', null, h('h3', null, h('span', { class: 'num' }, String(i + 1)), b.name), chips, S.replay ? null : acts));
+    card.addEventListener('click', ev => { if (!ev.target.closest('button')) focusStop(i, false); });
+    tl.append(card);
+  });
+  const fin = legNode(last, 'back to your start');
+  if (fin) tl.append(fin);
+
+  for (const i of p.issues || []) $('issues').append(h('div', { class: 'issue ' + i.status }, ic(i.status === 'fail' ? 'alert' : 'help'), h('span', null, i.message)));
+  for (const n of p.notes || []) $('notes').append(h('div', { class: 'note' }, ic('shield'), h('span', null, n)));
+  if (S.replay) { $('ctlHint').textContent = 'Editing is off in replay mode.'; }
+}
+function durationMin(a, b) {
+  const [h1, m1] = a.split(':').map(Number), [h2, m2] = b.split(':').map(Number);
+  const d = (h2 * 60 + m2) - (h1 * 60 + m1); return d > 0 ? d : 0;
+}
+
+/* ---------- assistant controls (structured changes only) ---------- */
+function canEditNow(res) {
+  res = res || S.view;
+  return !!(S.tripId && !S.replay && !S.busy && S.current && res && !res.awaiting_decision && !res.clarification);
+}
+function refreshControls() {
+  const ok = canEditNow();
+  for (const id of ['lateSel', 'lateBtn', 'timeSel', 'timeBtn', 'budSel', 'budNo', 'budBtn']) $(id).disabled = !ok;
+  let hint = 'Change something and the planner re-plans around it. Locked stops stay put.';
+  if (S.replay) hint = 'Editing is off in replay mode.';
+  else if (!S.current) hint = 'Save a plan first, then adjust it here.';
+  else if (S.busy) hint = 'Working…';
+  else if (S.view && S.view.awaiting_decision) hint = 'Accept or keep your plan before changing anything else.';
+  else if (S.view && S.view.clarification) hint = 'Answer the question first.';
+  $('ctlHint').textContent = hint;
+  document.querySelectorAll('.stop .actions button[aria-label]').forEach(b => { if (!b.getAttribute('aria-label').startsWith('Show')) b.disabled = !ok; });
+}
+async function replan(changes) {
+  if (!canEditNow()) return;
+  try {
+    S.busy = true; refreshControls();
+    const j = await api('/api/trips/' + S.tripId + '/replan', { changes });
+    if (j.immediate) { S.busy = false; S.current = null; showResult(j.result, {}); return; }
+    S.busy = false; beginRun('Re-planning around your change'); track(j.run_id);
+  } catch (e) { S.busy = false; refreshControls(); put('notice', notice('err', 'alert', e.message)); }
+}
+$('lateBtn').onclick = () => replan([{ type: 'running_late', minutes: +$('lateSel').value }]);
+$('timeBtn').onclick = () => replan([{ type: 'set_minutes', minutes: +$('timeSel').value }]);
+$('budBtn').onclick = () => {
+  const no = $('budNo').checked, v = $('budSel').value;
+  if (!no && v === '') { put('notice', notice('warn', 'help', 'Enter a budget, or tick “No budget limit”.')); $('budSel').focus(); return; }
+  replan([{ type: 'set_budget', budget_dollars: no ? null : +v, no_budget_limit: no }]);
+};
+
+/* ---------- map (never allowed to break the plan) ---------- */
+function pinIcon(label, cls) { return L.divIcon({ className: '', html: '<div class="pin ' + (cls || '') + '">' + label + '</div>', iconSize: [30, 30], iconAnchor: [15, 15] }); }
+function renderMap(shown) {
+  const origin = shown.origin, blocks = (shown.proposal && shown.proposal.blocks) || [];
   try {
     if (typeof L === 'undefined') throw new Error('map library failed to load');
-    if (!map) {
-      map = L.map('map');
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
-    }
+    if (!map) { map = L.map('map'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map); }
     if (layer) layer.remove();
-    layer = L.layerGroup().addTo(map);
-    meMarker = null;
+    layer = L.layerGroup().addTo(map); markers = []; meMarker = null;
     const pts = [];
-    if (origin && origin.lat != null) {
-      pts.push([origin.lat, origin.lon]);
-      L.circleMarker([origin.lat, origin.lon], { radius: 7, color: '#1f6feb', weight: 3 })
-        .bindTooltip('Start / end').addTo(layer);
-    }
-    (blocks || []).forEach((b, i) => {
-      if (b.lat == null || b.lon == null) return;
+    if (origin && origin.lat != null) { pts.push([origin.lat, origin.lon]); L.marker([origin.lat, origin.lon], { icon: pinIcon('S', 'home'), keyboard: false }).bindTooltip('Start / end').addTo(layer); }
+    blocks.forEach((b, i) => {
+      if (b.lat == null || b.lon == null) { markers[i] = null; return; }
       pts.push([b.lat, b.lon]);
-      L.marker([b.lat, b.lon]).bindTooltip((i + 1) + '. ' + b.name).addTo(layer);
+      const m = L.marker([b.lat, b.lon], { icon: pinIcon(String(i + 1)), keyboard: false }).bindTooltip(b.name).addTo(layer);
+      m.on('click', () => focusStop(i, false)); markers[i] = m;
     });
-    // straight connector lines (times are straight-line estimates, not routes)
-    for (let i = 1; i < pts.length; i++) {
-      L.polyline([pts[i - 1], pts[i]], { color: '#1f6feb', weight: 2, opacity: 0.45, dashArray: '6 6' }).addTo(layer);
-    }
+    for (let i = 1; i < pts.length; i++) L.polyline([pts[i - 1], pts[i]], { color: '#2459e6', weight: 2, opacity: .5, dashArray: '6 6' }).addTo(layer);
     if (pts.length) map.fitBounds(pts, { padding: [34, 34], maxZoom: 16 });
-    setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 60);
-  } catch (e) {
-    const n = $('mapNote');
-    n.classList.remove('hide');
-    n.textContent = '⚠ Map could not load (' + e.message + '). Your plan above is unaffected.';
-  }
+    setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 80);
+    hide('mapNote');
+  } catch (e) { show('mapNote'); $('mapNote').textContent = 'Map could not load (' + e.message + '). Your plan is unaffected.'; }
+}
+function focusStop(i, pan) {
+  S.focus = i;
+  document.querySelectorAll('.stop').forEach((s, k) => s.classList.toggle('focus', k === i));
+  markers.forEach((m, k) => { if (m && m._icon) { const d = m._icon.firstChild; if (d) d.classList.toggle('focus', k === i); } });
+  const b = S.view && S.current && (S.view.proposal ? S.view : S.current).proposal.blocks[i];
+  if (pan && b && b.lat != null && map) {
+    if (matchMedia('(max-width:999px)').matches) setTab('map');
+    try { map.flyTo([b.lat, b.lon], Math.max(map.getZoom(), 16)); markers[i] && markers[i].openTooltip(); } catch (e) {}
+  } else { const el = $('stop' + i); if (el && !pan) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
 }
 
-/* ---------------- quest tracking (browser-only) ---------------- */
-function resetQuestPanel() {
-  hide('questPanel');
-  $('questPanel').classList.remove('active');
-  $('questBtn').classList.remove('hide');
-  $('arrivedBtn').classList.add('hide');
-  $('questNext').textContent = '';
-  $('questInfo').textContent = '';
-  stopQuest();
+/* ---------- quest (browser-only tracking) ---------- */
+function stopQuest() { if (S.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(S.watchId); S.watchId = null; }
+function haversine(a, b, c, d) { const R = 6371000, r = x => x * Math.PI / 180, dp = r(c - a), dl = r(d - b);
+  const k = Math.sin(dp / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(dl / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(k)); }
+const fmtDist = m => m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km';
+function questPlan() { const v = S.current || S.view; return v && v.proposal ? v.proposal : null; }
+function renderQuest(shown, res) {
+  stopQuest(); S.nextIdx = 0;
+  const q = $('quest'); q.classList.remove('active');
+  const p = shown.proposal;
+  if (!p || (res && res.awaiting_decision)) { q.classList.add('hide'); return; }
+  q.classList.remove('hide');
+  put('questBtn', ic('play'), 'Start Quest'); $('questBtn').classList.remove('hide');
+  put('arrivedBtn', ic('check'), "I've arrived"); $('arrivedBtn').classList.add('hide');
+  put('privacy', ic('shield'), h('span', null, 'Live tracking runs only in your browser to measure the distance to your next stop. Your location is not sent anywhere.'));
+  questHeadline(); $('questInfo').textContent = '';
 }
-function updateQuestHeadline() {
-  document.querySelectorAll('.stop').forEach((s, i) => s.classList.toggle('next', i === nextIdx));
-  const b = plan && plan.blocks[nextIdx];
-  $('questNext').textContent = b ? 'Next: ' + b.name + ' · ' + b.start : 'Quest complete 🎉';
+function questHeadline() {
+  const p = questPlan(); if (!p) return;
+  document.querySelectorAll('.stop').forEach((s, i) => s.classList.toggle('next', i === S.nextIdx && $('quest').classList.contains('active')));
+  const b = p.blocks[S.nextIdx];
+  $('questNext').textContent = b ? 'Next: ' + b.name + ' · ' + b.start : 'Quest complete';
 }
-function stopQuest() {
-  if (watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
-  watchId = null;
-}
-function haversine(a, b, c, d) {
-  const R = 6371000, r = x => x * Math.PI / 180;
-  const dp = r(c - a), dl = r(d - b);
-  const h = Math.sin(dp / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(dl / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-function fmtDist(m) { return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km'; }
-
 $('questBtn').onclick = () => {
-  if (!plan || !navigator.geolocation) return;
-  $('questBtn').classList.add('hide');
-  $('arrivedBtn').classList.remove('hide');
-  $('questPanel').classList.add('active');
-  $('questInfo').textContent = 'Getting your position…';
-  try {
-    watchId = navigator.geolocation.watchPosition(p => {
-      const c = p.coords;
-      try {
-        if (map) {
-          if (!meMarker) meMarker = L.circleMarker([c.latitude, c.longitude],
-            { radius: 8, color: '#d9480f', fillOpacity: 0.8 }).addTo(layer || map);
-          else meMarker.setLatLng([c.latitude, c.longitude]);
-        }
-      } catch (e) { /* map trouble must not stop tracking */ }
-      const b = plan.blocks[nextIdx];
-      if (!b) { $('questInfo').textContent = 'All stops done — head home! 🏠'; return; }
-      if (b.lat == null) { $('questInfo').textContent = 'Next: ' + b.name + ' at ' + b.start + ' (no map pin for this stop)'; return; }
-      const m = haversine(c.latitude, c.longitude, b.lat, b.lon);
-      $('questInfo').textContent = m < 60
-        ? "You're at " + b.name + '. Enjoy until ' + b.end + '! 🎉'
-        : 'Next: ' + b.name + ' at ' + b.start + ' · ' + fmtDist(m) + ' away';
-    }, e => {
-      $('questInfo').textContent = 'Lost your location: ' + (e.message || 'unknown error');
-    }, { enableHighAccuracy: true, maximumAge: 5000 });
-  } catch (e) {
-    $('questInfo').textContent = 'Could not start tracking: ' + e.message;
-  }
+  const p = questPlan(); if (!p || !navigator.geolocation) return;
+  $('questBtn').classList.add('hide'); $('arrivedBtn').classList.remove('hide'); $('quest').classList.add('active');
+  $('questInfo').textContent = 'Getting your position…'; questHeadline();
+  S.watchId = navigator.geolocation.watchPosition(pos => {
+    const c = pos.coords;
+    try { if (map && layer) { if (!meMarker) meMarker = L.circleMarker([c.latitude, c.longitude], { radius: 8, color: '#c2410c', fillOpacity: .85 }).addTo(layer); else meMarker.setLatLng([c.latitude, c.longitude]); } } catch (e) {}
+    const b = p.blocks[S.nextIdx];
+    if (!b) { $('questInfo').textContent = 'All stops done. Head home.'; return; }
+    if (b.lat == null) { $('questInfo').textContent = 'Next: ' + b.name + ' at ' + b.start + ' (no map pin for this stop)'; return; }
+    const m = haversine(c.latitude, c.longitude, b.lat, b.lon);
+    $('questInfo').textContent = m < 60 ? "You're at " + b.name + '. Enjoy until ' + b.end + '.' : fmtDist(m) + ' to ' + b.name + ' (' + b.start + ')';
+  }, e => { $('questInfo').textContent = 'Lost your location: ' + (e.message || 'unknown error'); }, { enableHighAccuracy: true, maximumAge: 5000 });
 };
 $('arrivedBtn').onclick = () => {
-  nextIdx++;
-  updateQuestHeadline();
-  if (!plan || nextIdx >= plan.blocks.length) {
-    $('questInfo').textContent = 'All stops done — head back to your start! 🏠';
-    $('arrivedBtn').classList.add('hide');
-    stopQuest();
-  }
+  const p = questPlan(); S.nextIdx++; questHeadline();
+  if (!p || S.nextIdx >= p.blocks.length) { $('questInfo').textContent = 'All stops done. Head back to your start.'; $('arrivedBtn').classList.add('hide'); stopQuest(); }
 };
 
-/* ---------------- replay mode ---------------- */
-async function loadReplayFixture() {
-  let lastErr = null;
-  for (const path of REPLAY_PATHS) {
-    try {
-      const r = await fetch(path);
-      if (!r.ok) { lastErr = path + ' → HTTP ' + r.status; continue; }
-      return await r.json();
-    } catch (e) { lastErr = path + ' → ' + e.message; }
-  }
-  throw new Error('Replay fixture not found. Tried: ' + REPLAY_PATHS.join(', ') +
-    ' (last error: ' + lastErr + '). The replay file is authored separately and is not in this build yet.');
+/* ---------- tabs (mobile) ---------- */
+function setTab(t) {
+  document.body.setAttribute('data-tab', t);
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  if (t === 'map' && map) setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 60);
 }
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
+/* ---------- replay (recorded run; no server, no model) ---------- */
+async function loadReplayFixture() {
+  let last = null;
+  for (const path of REPLAY_PATHS) {
+    try { const r = await fetch(path); if (!r.ok) { last = path + ' → HTTP ' + r.status; continue; } return await r.json(); }
+    catch (e) { last = path + ' → ' + e.message; }
+  }
+  throw new Error('Replay fixture not found. Tried: ' + REPLAY_PATHS.join(', ') + ' (last error: ' + last + ').');
+}
 function initReplay() {
-  document.body.classList.add('replay');
-  document.title = 'SideQuest — replay';
-  $('modeChip').textContent = '▶ replay';
-  $('modeChip').classList.remove('live');
-  hide('formCard'); show('replayCard');
-  hide('emptyCard'); show('progressCard');
-  $('events').replaceChildren();
+  document.body.classList.add('replay'); S.replay = true; document.title = 'SideQuest — replay';
+  $('modeChip').textContent = 'Replay'; $('modeChip').className = 'chip warn';
+  hide('compose'); show('working'); $('workTitle').textContent = 'Replaying a recorded run';
   loadReplayFixture().then(fx => {
-    const meta = fx.meta || {};
-    $('replayMeta').textContent = (meta.label || 'Recorded run') +
-      (meta.recorded_at ? ' · recorded ' + meta.recorded_at : '');
-    $('replayReq').textContent = '“' + (fx.request_summary || '') + '”';
-    // play the recorded events ~700ms apart, then render via the normal path
-    const evs = fx.events || [];
-    let i = 0;
+    const evs = fx.events || []; let i = 0;
     const step = () => {
       if (i < evs.length) { appendEvents([evs[i]]); i++; setTimeout(step, 700); return; }
-      $('spinner').style.visibility = 'hidden';
-      if (!fx.result) {
-        fail('Replay fixture has no result to render.');
-        return;
-      }
-      renderResult(fx.result, { replay: true });
-      $('replayMsg').textContent = '✓ Replay complete — everything above came from the recorded file.';
+      hide('working');
+      if (!fx.result) { put('notice', notice('err', 'alert', 'Replay fixture has no result to render.')); show('workspace'); return; }
+      showResult(fx.result, { replay: true });
+      put('notice', notice('warn', 'play', 'Replay complete. Everything above came from the recorded file: ' + ((fx.meta && fx.meta.label) || 'recorded run') + '.'));
     };
     step();
-  }).catch(e => {
-    hide('progressCard'); show('emptyCard');
-    $('emptyCard').innerHTML = '';
-    $('emptyCard').append(el('div', 'big', '📼'));
-    $('emptyCard').append(el('h2', 'err', 'Replay unavailable'));
-    const p = el('p', 'sub', e.message);
-    p.style.maxWidth = '440px'; p.style.margin = '0 auto';
-    $('emptyCard').append(p);
-  });
+  }).catch(e => { hide('working'); show('workspace'); put('notice', notice('err', 'alert', e.message)); });
 }
 
-/* ---------------- boot ---------------- */
-$('go').onclick = startPlan;
-$('locBtn').onclick = getLocation;
-if (REPLAY) {
-  initReplay();
-} else {
-  getLocation();
+/* ---------- boot ---------- */
+function boot() {
+  put('markIc', ic('compass')); put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Share my location');
+  put('assistIc', ic('chat')); put('chevIc', ic('chev'));
+  put('tabPlan', ic('list'), 'Plan'); put('tabMap', ic('map'), 'Map'); put('tabAssist', ic('chat'), 'Assistant');
+  const pts = [['shield', 'Every plan is checked in code, not just written by a model.'], ['pin', 'Uses your real location and real nearby places.'],
+               ['help', 'Says “unknown” when it is not sure, instead of guessing.']];
+  put('points', pts.map(([i, t]) => h('li', null, h('span', { class: 'dotic' }, ic(i)), h('span', null, t))));
+  initTheme();
+  $('req').addEventListener('input', () => { $('reqCount').textContent = $('req').value.length; $('reqErr').classList.add('hide'); });
+  $('reqCount').textContent = $('req').value.length;
+  $('locBtn').onclick = getLocation;
+  $('nolimit').addEventListener('change', () => { $('budget').disabled = $('nolimit').checked; });
+  $('budNo').addEventListener('change', () => { $('budSel').disabled = $('budNo').checked; });
+  $('newBtn').onclick = () => { if (S.replay) { location.href = location.pathname; return; } stopQuest(); S.current = S.view = S.tripId = null; showCompose(); $('go').disabled = !S.pos; };
+  if (REPLAY) initReplay(); else getLocation();
 }
+boot();
 </script>
 </body>
 </html>

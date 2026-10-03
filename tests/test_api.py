@@ -73,4 +73,4 @@ def test_unknown_run_404_and_index_served():
     c = TestClient(create_app(lambda: ScriptedProvider([]), lambda: NOW))
     assert c.get("/api/runs/nope").status_code == 404
     page = c.get("/")
-    assert page.status_code == 200 and "Share my location" in page.text and 'integrity="sha256-' in page.text
+    assert page.status_code == 200 and "Plan my outing" in page.text and 'integrity="sha256-' in page.text

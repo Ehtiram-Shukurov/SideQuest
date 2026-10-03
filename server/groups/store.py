@@ -54,13 +54,22 @@ def _new_id() -> str:
 
 class Store:
     def __init__(self, path: str = ":memory:") -> None:
-        if path != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(path, check_same_thread=False)
-        self._db.row_factory = sqlite3.Row
+        # Connect lazily: importing the app must not create a database file as a side effect.
+        self._path = path
+        self._conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()
+
+    @property
+    def _db(self) -> sqlite3.Connection:
         with self._lock:
-            self._db.executescript(SCHEMA)
+            if self._conn is None:
+                if self._path != ":memory:":
+                    Path(self._path).parent.mkdir(parents=True, exist_ok=True)
+                conn = sqlite3.connect(self._path, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.executescript(SCHEMA)
+                self._conn = conn
+            return self._conn
 
     def _one(self, sql: str, args: tuple = ()) -> dict[str, Any] | None:
         with self._lock:
@@ -164,6 +173,16 @@ class Store:
             except sqlite3.IntegrityError:
                 return None
         return qid
+
+    def supersede_pending(self, gid: str, mid: str, keep: tuple[str, str] | None) -> None:
+        """Expire this member's pending questions, except the one for window `keep` (if any)."""
+        with self._lock, self._db:
+            if keep is None:
+                self._db.execute("UPDATE questions SET status='expired' WHERE group_id=? AND member_id=? AND status='pending'",
+                                 (gid, mid))
+            else:
+                self._db.execute("UPDATE questions SET status='expired' WHERE group_id=? AND member_id=? AND status='pending' "
+                                 "AND NOT (win_start=? AND win_end=?)", (gid, mid, keep[0], keep[1]))
 
     def list_questions(self, gid: str) -> list[dict[str, Any]]:
         return self._all("SELECT * FROM questions WHERE group_id = ? ORDER BY created_at, id", (gid,))

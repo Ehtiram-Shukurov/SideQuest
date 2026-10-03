@@ -37,6 +37,12 @@ from .store import Store
 PRIVATE_CODES = {"BUDGET_PER_PERSON": "A traveller's budget is not satisfied or not known yet.",
                  "ACCESSIBILITY": "A traveller's access requirement is not confirmed for a stop."}
 MAX_WINDOWS = 8
+# Interest matching is a plain keyword match (plus these few synonyms), not understanding.
+SYNONYMS = {"views": ("scenic", "viewpoint", "overlook", "view"), "scenery": ("scenic", "viewpoint", "overlook"),
+            "hiking": ("trail", "hike", "outdoor", "park"), "walks": ("walk", "trail", "park", "outdoor"),
+            "nature": ("park", "outdoor", "garden", "trail"), "parks": ("park", "garden"), "coffee": ("cafe", "coffee"),
+            "food": ("food", "cafe", "restaurant"), "museums": ("museum", "gallery", "culture"),
+            "art": ("art", "gallery", "museum")}
 
 
 # --- request models --------------------------------------------------------------
@@ -267,6 +273,8 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
         for mid in sorted(bw.excluded):  # ask people the best window leaves out
             text = f"Could you make {_fmt_window(bw.window.start, bw.window.end, tz)}?"
             store.add_question(gid, mid, bw.window.start.isoformat(), bw.window.end.isoformat(), text)
+        for mid in members:  # a newer plan supersedes older open questions
+            store.supersede_pending(gid, mid, (bw.window.start.isoformat(), bw.window.end.isoformat()) if mid in bw.excluded else None)
         attendees = [members[mid] for mid in members if mid in bw.attendees]
         owner = next((m for m in attendees if m["role"] == "organizer"), attendees[0])
         here = Location(id="here", name="Meeting point", lat=group["lat"], lon=group["lon"], timezone=tz)
@@ -408,7 +416,7 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
             chk = next((c for c in rep.checks if c.code == "BUDGET_PER_PERSON" and c.participant_ids == (m.id,)), None)
             status = {"pass": "within budget", "fail": "over budget", "unknown": "budget unknown"}.get(chk.status if chk else "unknown")
             text = " ".join(f"{b['name']} {' '.join(b.get('categories', []))}" for b in blocks).lower()
-            hit = [i for i in m.interests if i.lower() in text]
+            hit = [i for i in m.interests if any(t in text for t in (i.lower(), *SYNONYMS.get(i.lower(), ())))]
             row: dict[str, Any] = {"id": m.id, "name": m.display_name, "budget_status": status,
                                    "fit": {"matched": hit, "total": len(m.interests)}}
             if m.id == viewer:  # only you see your own amounts
@@ -464,6 +472,8 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
         names = {m["id"]: m["name"] for m in members}
         questions = []
         for q in store.list_questions(gid):
+            if q["status"] == "expired":
+                continue
             if q["member_id"] == me["id"] or me["role"] == "organizer":
                 questions.append({"id": q["id"], "text": q["text"], "status": q["status"], "for": names.get(q["member_id"], "?"),
                                   "mine": q["member_id"] == me["id"], "start": q["win_start"], "end": q["win_end"]})

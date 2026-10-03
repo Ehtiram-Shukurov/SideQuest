@@ -196,6 +196,27 @@
   .empty{text-align:center;padding:44px 20px;color:var(--mute)}
   footer{max-width:1240px;margin:0 auto;padding:6px 16px 90px;color:var(--mute);font-size:12.5px}
 
+  /* ---------- group trips ---------- */
+  .segmented{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);margin-top:12px}
+  .segmented button{background:transparent;color:var(--mute);border-radius:10px;min-height:42px}
+  .segmented button[aria-pressed="true"]{background:var(--surface);color:var(--brand);box-shadow:var(--shadow)}
+  .group-only{display:none} .group-mode .group-only{display:block} .group-mode .solo-only{display:none!important}
+  .gtop-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+  .invite{display:grid;gap:8px;margin-top:14px;padding:12px;border:1px dashed var(--brand);border-radius:12px;background:var(--brand-soft)}
+  .invite .line{display:flex;gap:8px} .invite input{flex:1;min-width:0}
+  ul.mlist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:10px}
+  .mem{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);display:grid;gap:6px}
+  .mem .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .winrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:8px}
+  .priv{display:inline-flex;gap:4px;align-items:center;font-size:11.5px;font-weight:700;color:var(--mute);margin-left:6px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2)}
+  .modes{display:flex;gap:14px;flex-wrap:wrap}
+  .gstop{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .gstop:first-child{border-top:0}
+  .peoplebox{display:grid;gap:8px;margin-top:12px}
+  .person{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:14px;display:grid;gap:4px}
+  .stale{border:2px solid var(--warn)}
+  @media(max-width:520px){.winrow{grid-template-columns:1fr} .gstop{grid-template-columns:1fr}}
+
   /* ---------- mobile tabs ---------- */
   nav.tabs{display:none}
   @media(max-width:480px){
@@ -236,8 +257,17 @@
     </div>
 
     <form class="card" id="formCard" novalidate>
-      <h2 class="big">Plan an outing</h2>
+      <h2 class="big" id="formTitle">Plan an outing</h2>
       <p class="sub">Your location is required: it is how we find places and plan the way back.</p>
+      <div class="segmented" role="group" aria-label="Trip type">
+        <button type="button" id="modeSolo" aria-pressed="true">Just me</button>
+        <button type="button" id="modeGroup" aria-pressed="false">With a group</button>
+      </div>
+      <div class="group-only">
+        <label for="gTitleIn">Trip name</label><input id="gTitleIn" type="text" maxlength="80" placeholder="e.g. Saturday afternoon out">
+        <label for="gNameIn">Your name</label><input id="gNameIn" type="text" maxlength="40" placeholder="So friends know who you are">
+        <p class="help">Friends join with an invite link and add their own availability, budget and preferences. SideQuest finds the time that fits the most people.</p>
+      </div>
       <div id="loc" class="loc bad" role="status"><span class="dot"></span><div><strong>Location required.</strong><small>We need your position to find places nearby.</small></div></div>
       <button type="button" id="locBtn" class="secondary" style="margin-top:10px;width:100%"></button>
 
@@ -246,19 +276,19 @@
       <p class="help" id="reqHelp"><span id="reqCount">0</span>/500 characters</p>
       <p class="field-err hide" id="reqErr" role="alert"></p>
 
-      <div class="row2">
+      <div class="row2 solo-only">
         <div><label for="mins">Time available</label>
           <select id="mins"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option>
             <option value="180">3 hours</option><option value="240" selected>4 hours</option><option value="360">6 hours</option></select></div>
         <div><label for="mode">Getting around</label>
           <select id="mode"><option value="walk">Walk</option><option value="bike">Bike</option><option value="car">Car (I'm driving)</option></select></div>
       </div>
-      <div class="row2">
+      <div class="row2 solo-only">
         <div><label for="budget">Budget (USD)</label><input id="budget" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 40"></div>
         <div><span class="lbl">&nbsp;</span><label class="check"><input id="nolimit" type="checkbox"> No budget limit</label></div>
       </div>
       <div class="row2">
-        <div><label for="rain">Rain tolerance</label>
+        <div class="solo-only"><label for="rain">Rain tolerance</label>
           <select id="rain"><option value="">Don't mind rain</option><option value="60">Avoid likely rain (over 60%)</option>
             <option value="40">Avoid possible rain (over 40%)</option><option value="20">Avoid any real chance (over 20%)</option></select></div>
         <div><label for="data">Places data</label>
@@ -267,6 +297,62 @@
       <button type="submit" id="go" disabled>Plan my outing</button>
       <p id="msg" role="status" aria-live="polite"></p>
     </form>
+  </section>
+
+  <!-- ============ join ============ -->
+  <section id="joinView" class="card hide" style="max-width:520px;margin:20px auto;width:100%">
+    <h2 class="big">Join a group trip</h2>
+    <p class="sub" id="joinTitle">Checking your invite…</p>
+    <label for="joinName">Your name</label>
+    <input id="joinName" type="text" maxlength="40" placeholder="So friends know who you are">
+    <button id="joinBtn" style="width:100%;margin-top:16px" disabled>Join</button>
+    <p id="joinMsg" class="field-err hide" role="alert"></p>
+  </section>
+
+  <!-- ============ group ============ -->
+  <section id="groupView" class="hide">
+    <div class="card">
+      <div class="gtop-row"><div><h2 class="big" id="gTitle"></h2><p class="sub" id="gRequest"></p></div><span class="chip brand" id="gRole"></span></div>
+      <div class="invite hide" id="gInvite">
+        <span class="lbl" style="margin:0">Invite link (anyone with it can join)</span>
+        <div class="line"><input id="gInviteUrl" type="text" readonly aria-label="Invite link"><button class="small" id="gCopy" type="button">Copy</button></div>
+        <div class="line"><button class="small ghost" id="gInviteToggle" type="button">Revoke link</button><span class="help" id="gInviteMsg" style="align-self:center"></span></div>
+      </div>
+      <details class="hide" id="gEdit" style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center">Edit what you are planning</summary>
+        <textarea id="gReqIn" maxlength="500"></textarea><button class="small" id="gReqSave" type="button" style="margin-top:8px">Save</button></details>
+    </div>
+    <div class="ws" style="margin-top:16px">
+      <div class="col">
+        <section class="card"><h2>Who's in</h2><p class="sub">Everyone sees names, availability and interests. Budgets and needs stay private.</p><ul class="mlist" id="gMembers"></ul></section>
+        <form class="card" id="gForm" novalidate>
+          <h2>Your availability &amp; preferences</h2>
+          <p class="sub">Saved automatically for the group when you press Save. You can change it any time.</p>
+          <span class="lbl">When are you free?</span>
+          <div id="gWindows"></div>
+          <button type="button" class="small ghost" id="gAddWin" style="margin-top:8px">Add another time</button>
+          <div class="row2">
+            <div><label for="gBudget">Budget per person (USD)<span class="priv">Private</span></label><input id="gBudget" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 40"></div>
+            <div><span class="lbl">&nbsp;</span><label class="check"><input id="gNoLimit" type="checkbox"> No budget limit</label></div>
+          </div>
+          <span class="lbl">How can you get around?</span>
+          <div class="modes"><label class="check"><input type="checkbox" name="gmode" value="walk" checked> Walk</label>
+            <label class="check"><input type="checkbox" name="gmode" value="bike"> Bike</label>
+            <label class="check"><input type="checkbox" name="gmode" value="car"> Car</label></div>
+          <label for="gInterests">Interests (comma separated)</label><input id="gInterests" type="text" placeholder="coffee, hiking, museums">
+          <label for="gDiet">Dietary needs<span class="priv">Private</span></label><input id="gDiet" type="text" placeholder="e.g. vegetarian, nut allergy">
+          <div class="row2">
+            <div><span class="lbl">Access<span class="priv">Private</span></span><label class="check"><input id="gStepFree" type="checkbox"> I need step-free access</label></div>
+            <div><label for="gRain">Rain tolerance</label><select id="gRain"><option value="">Don't mind rain</option><option value="60">Avoid likely rain (over 60%)</option><option value="40">Avoid possible rain (over 40%)</option><option value="20">Avoid any real chance (over 20%)</option></select></div>
+          </div>
+          <button type="submit" id="gSave" style="margin-top:16px;width:100%">Save my availability</button>
+          <p id="gSaveMsg" class="help" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <div class="col">
+        <div id="gQuestions"></div>
+        <section class="card" id="gPlanCard"><h2>Plan</h2><div id="gPlan"></div></section>
+      </div>
+    </div>
   </section>
 
   <!-- ============ working ============ -->
@@ -469,6 +555,7 @@ async function startPlan() {
   const err = $('reqErr');
   if (len < 3) { err.textContent = 'Describe your outing in a few words first.'; err.classList.remove('hide'); $('req').focus(); return; }
   err.classList.add('hide'); formMsg('');
+  if (S.mode === 'group') { createGroup(); return; }
   $('go').disabled = true;
   S.current = null; S.view = null; S.tripId = null; stopQuest();
   beginRun('The agent is working');
@@ -517,7 +604,7 @@ function appendEvents(events) {
 
 /* ---------- results ---------- */
 function notice(kind, icon, text) { return h('div', { class: 'notice ' + kind, role: kind === 'err' ? 'alert' : 'status' }, ic(icon), h('span', null, text)); }
-function showCompose() { hide('workspace'); hide('working'); show('compose'); hide('newBtn'); document.body.classList.remove('has-ws'); }
+function showCompose() { hide('workspace'); hide('working'); hide('groupView'); hide('joinView'); show('compose'); hide('newBtn'); document.body.classList.remove('has-ws'); }
 
 function showResult(res, opts) {
   S.view = res; if (res.trip_id) S.tripId = res.trip_id;
@@ -839,6 +926,265 @@ function initReplay() {
   }).catch(e => { hide('working'); show('workspace'); put('notice', notice('err', 'alert', e.message)); });
 }
 
+/* =====================================================================
+   GROUP TRIPS. Roles come from the member token on the server; the client only stores its own
+   token. Others' budgets/needs are never sent to this browser. Polling every ~3 s (no websockets).
+   ===================================================================== */
+const G = { gid: null, token: null, timer: null, state: null, built: false, sig: {} };
+const gTokenKey = gid => 'sq-g-' + gid;
+function gLoadToken(gid) { try { return localStorage.getItem(gTokenKey(gid)); } catch (e) { return null; } }
+function gSaveToken(gid, t) { try { localStorage.setItem(gTokenKey(gid), t); } catch (e) {} }
+const pad2 = n => String(n).padStart(2, '0');
+function toLocalInput(iso) { const d = new Date(iso); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+function fromLocalInput(v) { return new Date(v).toISOString(); }
+function fmtRange(a, b) {
+  const A = new Date(a), B = new Date(b), t = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return A.toLocaleDateString([], { weekday: 'short' }) + ' ' + t(A) + '–' + t(B);
+}
+async function gapi(path, method, body) {
+  let r;
+  try {
+    r = await fetch(path, { method: method || 'GET', headers: Object.assign({ 'Content-Type': 'application/json' }, G.token ? { Authorization: 'Bearer ' + G.token } : {}),
+      body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch (e) { throw new Error("Couldn't reach the server. Make sure it is running."); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const d = typeof j.detail === 'string' ? j.detail : Array.isArray(j.detail) ? 'Please check the values you entered.' : 'The server rejected the request.';
+    const e = new Error(r.status === 429 ? 'The planner is busy with another run. Try again in a moment.' : r.status === 503 ? 'The AI planner is not connected on the server.' : d);
+    e.status = r.status; throw e;
+  }
+  return j;
+}
+function gChanged(key, value) { const s = JSON.stringify(value); if (G.sig[key] === s) return false; G.sig[key] = s; return true; }
+
+/* ---- create (from the compose form) ---- */
+function setMode(m) {
+  S.mode = m;
+  $('formCard').classList.toggle('group-mode', m === 'group');
+  $('modeSolo').setAttribute('aria-pressed', String(m === 'solo')); $('modeGroup').setAttribute('aria-pressed', String(m === 'group'));
+  $('formTitle').textContent = m === 'group' ? 'Plan with friends' : 'Plan an outing';
+  $('go').textContent = m === 'group' ? 'Create group trip' : 'Plan my outing';
+}
+async function createGroup() {
+  const name = $('gNameIn').value.trim(), title = $('gTitleIn').value.trim();
+  if (!name || !title) { formMsg('Give the trip a name and enter your own name.', 'field-err'); return; }
+  $('go').disabled = true; formMsg('');
+  try {
+    const j = await gapi('/api/groups', 'POST', { title, request: $('req').value.trim(), lat: S.pos.latitude, lon: S.pos.longitude,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone, data: $('data').value, display_name: name });
+    gSaveToken(j.group_id, j.member_token); history.replaceState(null, '', '?g=' + j.group_id); enterGroup(j.group_id);
+  } catch (e) { formMsg(e.message, 'field-err'); }
+  $('go').disabled = !S.pos;
+}
+
+/* ---- join ---- */
+async function showJoin(token) {
+  ['compose', 'working', 'workspace', 'groupView'].forEach(hide); show('joinView');
+  try {
+    const info = await gapi('/api/invites/' + encodeURIComponent(token));
+    $('joinTitle').textContent = 'You are invited to “' + info.title + '” (' + info.members + ' already in).';
+    $('joinBtn').disabled = false;
+    $('joinBtn').onclick = async () => {
+      const name = $('joinName').value.trim();
+      if (!name) { $('joinMsg').textContent = 'Enter your name first.'; show('joinMsg'); return; }
+      $('joinBtn').disabled = true; hide('joinMsg');
+      try {
+        const j = await gapi('/api/invites/' + encodeURIComponent(token) + '/join', 'POST', { name });
+        gSaveToken(j.group_id, j.member_token); history.replaceState(null, '', '?g=' + j.group_id); enterGroup(j.group_id);
+      } catch (e) { $('joinMsg').textContent = e.message; show('joinMsg'); $('joinBtn').disabled = false; }
+    };
+  } catch (e) { $('joinTitle').textContent = e.status === 404 ? 'This invite link is invalid or was revoked. Ask the organizer for a new one.' : e.message; }
+}
+
+/* ---- group view ---- */
+function enterGroup(gid) {
+  G.gid = gid; G.token = gLoadToken(gid); G.built = false; G.state = null; G.sig = {};
+  ['compose', 'working', 'workspace', 'joinView'].forEach(hide); show('groupView'); show('newBtn');
+  $('modeChip').textContent = 'Group trip'; $('modeChip').className = 'chip brand';
+  if (!G.token) { $('gTitle').textContent = 'Group trip'; $('gRequest').textContent = 'You are not signed in to this group on this device. Open your invite link to join.'; clear('gMembers'); return; }
+  gPoll();
+}
+async function gPoll() {
+  clearTimeout(G.timer);
+  try { renderGroup(await gapi('/api/groups/' + G.gid)); }
+  catch (e) {
+    if (e.status === 401 || e.status === 404) { $('gRequest').textContent = e.message; put('gPlan', notice('err', 'alert', e.message)); return; }
+  }
+  G.timer = setTimeout(gPoll, document.hidden ? 8000 : 3000);
+}
+function renderGroup(st) {
+  G.state = st;
+  const org = st.me.role === 'organizer';
+  $('gTitle').textContent = st.group.title; $('gRequest').textContent = '“' + st.group.request + '”';
+  $('gRole').textContent = org ? 'You are the organizer' : 'Member';
+  document.title = 'SideQuest — ' + st.group.title;
+  // invite + edit (organizer only; the server only sends the token to the organizer)
+  $('gInvite').classList.toggle('hide', !org); $('gEdit').classList.toggle('hide', !org);
+  if (org) {
+    const url = st.group.invite_token ? location.origin + location.pathname + '?join=' + st.group.invite_token : '';
+    $('gInviteUrl').value = url || '(link revoked)'; $('gCopy').disabled = !url;
+    $('gInviteToggle').textContent = url ? 'Revoke link' : 'Create a new link';
+    if (document.activeElement !== $('gReqIn') && !$('gEdit').open) $('gReqIn').value = st.group.request;
+  }
+  if (gChanged('members', st.members)) renderMembers(st);
+  if (!G.built) { buildGroupForm(st.me.inputs); G.built = true; }
+  if (gChanged('questions', st.questions)) renderQuestions(st);
+  if (gChanged('plan', [st.run, st.candidate, st.accepted, st.needs_replan, st.group.version])) renderGroupPlan(st);
+}
+
+function renderMembers(st) {
+  const org = st.me.role === 'organizer';
+  put('gMembers', st.members.map(m => {
+    const wins = (m.windows || []).map(w => fmtRange(w.start, w.end)).join(' · ');
+    const li = h('li', { class: 'mem' },
+      h('div', { class: 'top' }, h('strong', null, m.name + (m.is_me ? ' (you)' : '')), h('span', { class: 'mini ' + (m.role === 'organizer' ? 'moved' : '') }, m.role),
+        m.submitted ? h('span', { class: 'mini ok' }, ic('check'), 'Availability shared') : h('span', { class: 'mini warn' }, 'Waiting for availability'),
+        m.budget_status ? h('span', { class: 'mini ' + (m.budget_status === 'within budget' ? 'ok' : 'warn') }, m.budget_status) : null),
+      wins ? h('div', { class: 'help' }, ic('clock'), ' ' + wins) : null,
+      (m.interests && m.interests.length) ? h('div', { class: 'chips' }, m.interests.map(i => h('span', { class: 'mini' }, i))) : null,
+      (org && !m.is_me) ? h('div', { class: 'actions' }, h('button', { class: 'small danger', type: 'button', 'aria-label': 'Remove ' + m.name, onclick: async () => {
+        if (!confirm('Remove ' + m.name + ' from the group? Their access ends immediately.')) return;
+        try { await gapi('/api/groups/' + G.gid + '/members/' + m.id, 'DELETE'); G.sig = {}; gPoll(); } catch (e) { put('gPlan', notice('err', 'alert', e.message)); }
+      } }, ic('trash'), 'Remove')) : null);
+    return li;
+  }));
+}
+
+/* ---- my inputs form (built once, so polling never overwrites what you are typing) ---- */
+function winRow(start, end) {
+  const row = h('div', { class: 'winrow' },
+    h('div', null, h('label', { class: 'lbl', style: 'margin-top:0' }, 'From'), h('input', { type: 'datetime-local', value: start || '', 'data-k': 'start' })),
+    h('div', null, h('label', { class: 'lbl', style: 'margin-top:0' }, 'Until'), h('input', { type: 'datetime-local', value: end || '', 'data-k': 'end' })),
+    h('button', { class: 'icon', type: 'button', 'aria-label': 'Remove this time', onclick: () => row.remove() }, ic('trash')));
+  return row;
+}
+function buildGroupForm(inp) {
+  const box = clear('gWindows');
+  const wins = (inp && inp.windows && inp.windows.length) ? inp.windows : [];
+  if (wins.length) wins.forEach(w => box.append(winRow(toLocalInput(w.start), toLocalInput(w.end))));
+  else { const a = new Date(Date.now() + 3600e3); a.setMinutes(0, 0, 0); box.append(winRow(toLocalInput(a), toLocalInput(new Date(a.getTime() + 3 * 3600e3)))); }
+  $('gAddWin').onclick = () => { if (box.children.length < 5) box.append(winRow('', '')); };
+  if (inp) {
+    $('gBudget').value = inp.budget_dollars == null ? '' : inp.budget_dollars; $('gNoLimit').checked = !!inp.no_budget_limit;
+    document.querySelectorAll('input[name="gmode"]').forEach(c => { c.checked = (inp.transport || []).includes(c.value); });
+    $('gInterests').value = (inp.interests || []).join(', '); $('gDiet').value = (inp.dietary || []).join(', ');
+    $('gStepFree').checked = !!inp.step_free; $('gRain').value = inp.avoid_rain_pct == null ? '' : String(inp.avoid_rain_pct);
+  }
+  $('gNoLimit').onchange = () => { $('gBudget').disabled = $('gNoLimit').checked; }; $('gBudget').disabled = $('gNoLimit').checked;
+}
+const splitList = v => v.split(',').map(x => x.trim()).filter(Boolean);
+$('gForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const msg = $('gSaveMsg'); msg.className = 'help'; msg.textContent = 'Saving…';
+  const windows = [];
+  for (const row of $('gWindows').children) {
+    const s = row.querySelector('[data-k="start"]').value, e = row.querySelector('[data-k="end"]').value;
+    if (!s && !e) continue;
+    if (!s || !e || new Date(e) <= new Date(s)) { msg.className = 'field-err'; msg.textContent = 'Each time needs a start and a later end.'; return; }
+    windows.push({ start: fromLocalInput(s), end: fromLocalInput(e) });
+  }
+  const modes = [...document.querySelectorAll('input[name="gmode"]:checked')].map(c => c.value);
+  if (!modes.length) { msg.className = 'field-err'; msg.textContent = 'Pick at least one way of getting around.'; return; }
+  try {
+    await gapi('/api/groups/' + G.gid + '/me/inputs', 'PUT', { windows, budget_dollars: $('gBudget').value === '' || $('gNoLimit').checked ? null : +$('gBudget').value,
+      no_budget_limit: $('gNoLimit').checked, transport: modes, car_seats: null, interests: splitList($('gInterests').value), dietary: splitList($('gDiet').value),
+      step_free: $('gStepFree').checked, avoid_rain_pct: $('gRain').value === '' ? null : +$('gRain').value });
+    msg.textContent = 'Saved. Everyone sees your availability within a few seconds.'; G.sig = {}; gPoll();
+  } catch (e) { msg.className = 'field-err'; msg.textContent = e.message; }
+});
+$('gCopy').onclick = async () => { try { await navigator.clipboard.writeText($('gInviteUrl').value); $('gInviteMsg').textContent = 'Copied.'; } catch (e) { $('gInviteUrl').select(); $('gInviteMsg').textContent = 'Press Ctrl+C to copy.'; } };
+$('gInviteToggle').onclick = async () => {
+  const enable = $('gInviteToggle').textContent.startsWith('Create');
+  try { await gapi('/api/groups/' + G.gid + '/invite', 'POST', { enabled: enable }); G.sig = {}; gPoll(); } catch (e) { $('gInviteMsg').textContent = e.message; }
+};
+$('gReqSave').onclick = async () => {
+  try { await gapi('/api/groups/' + G.gid, 'PATCH', { request: $('gReqIn').value.trim() }); G.sig = {}; gPoll(); } catch (e) { put('gPlan', notice('err', 'alert', e.message)); }
+};
+
+/* ---- questions: yes / no / suggest another time ---- */
+function renderQuestions(st) {
+  const box = clear('gQuestions');
+  for (const q of st.questions.filter(q => q.mine && q.status === 'pending')) {
+    const err = h('p', { class: 'field-err hide', role: 'alert' });
+    const send = async payload => { try { const r = await gapi('/api/groups/' + G.gid + '/questions/' + q.id + '/answer', 'POST', payload);
+        G.sig = {}; gPoll(); } catch (e) { err.textContent = e.message; err.classList.remove('hide'); } };
+    const a = new Date(q.start), b = new Date(q.end);
+    const s = h('input', { type: 'datetime-local', value: toLocalInput(a), 'aria-label': 'Alternative start' }), e = h('input', { type: 'datetime-local', value: toLocalInput(b), 'aria-label': 'Alternative end' });
+    const alt = h('div', { class: 'hide' }, h('div', { class: 'row2' }, h('div', null, h('label', { class: 'lbl' }, 'From'), s), h('div', null, h('label', { class: 'lbl' }, 'Until'), e)),
+      h('button', { type: 'button', class: 'small', style: 'margin-top:10px', onclick: () => send({ answer: 'alt', alt_start: fromLocalInput(s.value), alt_end: fromLocalInput(e.value) }) }, 'Send my time'));
+    box.append(h('section', { class: 'card ask' }, h('h2', null, ic('help'), 'A question for you'),
+      h('p', { class: 'expl' }, q.text), h('p', { class: 'help' }, 'The window above fits everyone else. Your answer is shared with the organizer.'),
+      h('div', { class: 'choices' }, h('button', { type: 'button', onclick: () => send({ answer: 'yes' }) }, ic('check'), 'Yes, I can make it'),
+        h('button', { type: 'button', onclick: () => send({ answer: 'no' }) }, ic('trash'), "No, I can't"),
+        h('button', { type: 'button', onclick: () => alt.classList.toggle('hide') }, ic('clock'), 'Suggest another time')), alt, err));
+  }
+  if (st.me.role === 'organizer') {
+    const others = st.questions.filter(q => !q.mine);
+    if (others.length) box.append(h('section', { class: 'card' }, h('h2', null, 'Questions sent'), h('ul', { class: 'mlist' }, others.map(q =>
+      h('li', { class: 'mem' }, h('div', { class: 'top' }, h('strong', null, q.for), h('span', { class: 'mini ' + (q.status === 'yes' || q.status === 'alt' ? 'ok' : q.status === 'no' ? 'warn' : '') },
+        { pending: 'waiting for an answer', yes: 'said yes', no: "can't make it", alt: 'suggested another time' }[q.status] || q.status)), h('div', { class: 'help' }, q.text))))));
+  }
+}
+
+/* ---- plan: organizer controls, run progress, proposal, accepted plan ---- */
+const QSTATUS = { pending: 'asked, waiting for an answer', yes: 'said yes', no: "can't make it", alt: 'suggested another time' };
+function planBlock(plan, st, opts) {
+  const org = st.me.role === 'organizer';
+  const stops = h('div', null, plan.blocks.map(b => h('div', { class: 'gstop' }, h('div', { class: 'when' }, b.start + '–' + b.end),
+    h('div', null, h('strong', null, b.name), h('div', { class: 'chips' }, h('span', { class: 'mini' }, ic('wallet'), b.cost || ''),
+      (b.facts || []).map(factChip).filter(Boolean), b.step_free === true ? h('span', { class: 'mini ok' }, 'Step-free') : null)))));
+  const people = h('div', { class: 'peoplebox' }, plan.people.map(p => {
+    const mine = p.my_cost ? h('div', null, 'Your estimated cost: ' + (p.my_cost.low === p.my_cost.high ? '$' + p.my_cost.low.toFixed(0) : '$' + p.my_cost.low.toFixed(0) + '–$' + p.my_cost.high.toFixed(0))
+      + (p.my_cost.cap != null ? ' of your $' + p.my_cost.cap.toFixed(0) : '') + (p.my_cost.has_unknown ? ' (some prices unknown)' : '')) : null;
+    const fit = p.fit.total ? 'Interest match: ' + (p.fit.matched.length ? p.fit.matched.join(', ') : 'no listed interest matched') + ' (' + p.fit.matched.length + ' of ' + p.fit.total + ' interests, keyword match)' : 'Interest match: no interests listed';
+    return h('div', { class: 'person' }, h('div', { class: 'top', style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, h('strong', null, p.name + (p.id === st.me.id ? ' (you)' : '')),
+      h('span', { class: 'mini ' + (p.budget_status === 'within budget' ? 'ok' : 'warn') }, p.budget_status)), mine, h('div', { class: 'help' }, fit));
+  }));
+  const left = plan.excluded.length ? h('div', { class: 'notice warn', style: 'margin-top:12px' }, ic('help'),
+    h('span', null, 'Not in this plan: ' + plan.excluded.map(x => x.name + ' (' + (QSTATUS[x.question] || 'not asked yet') + ')').join(', ') + '.')) : null;
+  const label = { checked: 'Checked', provisional: 'Provisional', failed: 'Not valid' }[plan.overall] || plan.overall;
+  const decide = (opts.decide && org) ? h('div', { class: 'decide' },
+    h('button', { type: 'button', disabled: plan.stale, onclick: () => decideGroup('accept') }, ic('check'), 'Accept this plan'),
+    h('button', { type: 'button', class: 'ghost', onclick: () => decideGroup('reject') }, 'Discard')) : null;
+  return h('div', { class: plan.stale ? 'card stale' : '', style: plan.stale ? '' : 'margin-top:12px' },
+    h('h2', null, opts.title), h('div', { class: 'badges' }, h('span', { class: 'badge b-' + plan.overall }, label + ' · ' + plan.checks_passed + ' checks passed'),
+      h('span', { class: 'badge b-info' }, ic('clock'), plan.window), plan.data.synthetic ? h('span', { class: 'badge b-demo' }, 'DEMO DATA') : null,
+      plan.stale ? h('span', { class: 'badge b-provisional' }, 'Stale: inputs changed') : null),
+    plan.stale ? h('div', { class: 'notice warn', style: 'margin-top:10px' }, ic('alert'), h('span', null, 'Someone changed their availability or preferences after this plan was made. ' + (org ? 'Plan again to include the latest.' : 'The organizer needs to plan again.'))) : null,
+    h('p', { class: 'expl' }, plan.explanation), left, stops, h('h2', { style: 'margin-top:16px' }, 'Each person'), people,
+    (plan.issues || []).length ? h('div', { class: 'issues' }, plan.issues.map(i => h('div', { class: 'issue ' + i.status }, ic(i.status === 'fail' ? 'alert' : 'help'), h('span', null, i.message)))) : null,
+    decide, h('div', { class: 'notes' }, (plan.notes || []).map(n => h('div', { class: 'note' }, ic('shield'), h('span', null, n)))));
+}
+function renderGroupPlan(st) {
+  const org = st.me.role === 'organizer', run = st.run, kids = [];
+  const running = run && !run.done;
+  if (org) {
+    kids.push(h('div', null, h('button', { id: 'gPlanBtn', type: 'button', disabled: running, onclick: planForEveryone }, ic('route'), running ? 'Planning…' : 'Plan for everyone'),
+      h('p', { class: 'help' }, 'Picks the window that fits the most people and plans one outing for everyone in it. Splitting up is not supported.')));
+    if (st.needs_replan) kids.push(notice('warn', 'refresh', 'Someone answered a question but a new plan could not start automatically. Press “Plan for everyone”.'));
+  }
+  if (running) {
+    kids.push(h('div', { class: 'feedhead', style: 'margin-top:12px' }, h('div', { class: 'spinner' }), h('strong', null, 'The agent is working')),
+      h('ol', { class: 'feed' }, (run.events || []).map(e => h('li', { class: e.kind || '' }, h('span', null, e.summary)))));
+  } else if (run) {
+    if (run.error) kids.push(notice('err', 'alert', 'The run failed: ' + run.error));
+    else if (!st.candidate && run.message && run.status !== 'proposal_saved') kids.push(notice('warn', 'alert', run.message));
+  }
+  if (st.candidate) kids.push(planBlock(st.candidate, st, { title: org ? 'Proposed plan (not saved yet)' : 'Proposed plan (the organizer will review)', decide: true }));
+  if (st.accepted) kids.push(planBlock(st.accepted, st, { title: 'Group plan', decide: false }));
+  if (!st.candidate && !st.accepted && !running && !run) kids.push(h('p', { class: 'sub', style: 'margin-top:10px' }, org ? 'Once at least one person has shared availability, press “Plan for everyone”.' : 'The organizer will plan once everyone has shared their availability.'));
+  put('gPlan', kids);
+}
+async function planForEveryone() {
+  $('gPlanBtn').disabled = true;
+  try { await gapi('/api/groups/' + G.gid + '/plan', 'POST', {}); G.sig = {}; gPoll(); }
+  catch (e) { put('gPlan', notice('err', 'alert', e.message)); G.sig = {}; setTimeout(gPoll, 1500); }
+}
+async function decideGroup(which) {
+  try { await gapi('/api/groups/' + G.gid + '/decision', 'POST', { decision: which }); G.sig = {}; gPoll(); }
+  catch (e) { put('gPlan', notice('err', 'alert', e.message)); G.sig = {}; setTimeout(gPoll, 2500); }
+}
+
 /* ---------- boot ---------- */
 function boot() {
   put('markIc', ic('compass')); put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Share my location');
@@ -853,7 +1199,11 @@ function boot() {
   $('locBtn').onclick = getLocation;
   $('nolimit').addEventListener('change', () => { $('budget').disabled = $('nolimit').checked; });
   $('budNo').addEventListener('change', () => { $('budSel').disabled = $('budNo').checked; });
-  $('newBtn').onclick = () => { if (S.replay) { location.href = location.pathname; return; } stopQuest(); S.current = S.view = S.tripId = null; showCompose(); $('go').disabled = !S.pos; };
+  $('newBtn').onclick = () => { if (S.replay || G.gid) { location.href = location.pathname; return; } stopQuest(); S.current = S.view = S.tripId = null; showCompose(); $('go').disabled = !S.pos; };
+  $('modeSolo').onclick = () => setMode('solo'); $('modeGroup').onclick = () => setMode('group'); setMode('solo');
+  const q = new URLSearchParams(location.search);
+  if (!REPLAY && q.get('join')) { showJoin(q.get('join')); return; }
+  if (!REPLAY && q.get('g')) { enterGroup(q.get('g')); return; }
   if (REPLAY) initReplay(); else getLocation();
 }
 boot();

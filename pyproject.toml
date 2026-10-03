@@ -1,0 +1,21 @@
+[project]
+name = "sidequest"
+version = "0.1.0"
+description = "SideQuest: constraint-checked itinerary planner"
+requires-python = ">=3.12"
+dependencies = [
+  "pydantic>=2",
+  "fastapi",
+  "uvicorn",
+  "tzdata",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["server*"]

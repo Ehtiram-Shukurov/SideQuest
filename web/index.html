@@ -200,6 +200,11 @@
   .verify .top{display:flex;gap:8px;align-items:center;color:var(--warn)} .verify ul{margin:8px 0 0;padding-left:20px;font-size:14px}
   .verify a{color:var(--brand);font-weight:700}
 
+  ul.dirlist{margin:6px 0 0;padding-left:18px;font-size:14px} ul.dirlist a{color:var(--brand);font-weight:600}
+  .shareurl{display:flex;gap:8px} .shareurl input{flex:1;min-width:0}
+  .stopline{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .stopline:first-child{border-top:0}
+
   /* ---------- group trips ---------- */
   .segmented{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);margin-top:12px}
   .segmented button{background:transparent;color:var(--mute);border-radius:10px;min-height:42px}
@@ -313,6 +318,14 @@
     <p id="joinMsg" class="field-err hide" role="alert"></p>
   </section>
 
+  <!-- ============ shared (read-only) ============ -->
+  <section id="shareView" class="card hide" style="max-width:760px;margin:20px auto;width:100%">
+    <h2 class="big" id="shTitle">Shared plan</h2><p class="sub" id="shMeta"></p><div class="badges" id="shBadges"></div>
+    <div id="shStops" style="margin-top:12px"></div><div id="shVerify"></div><div id="shDirs"></div>
+    <div class="notes" id="shNotes"></div><p class="help" id="shNote"></p>
+    <a id="shIcs" class="hide" style="display:inline-block;margin-top:10px;font-weight:700;color:var(--brand)">Download calendar (.ics)</a>
+  </section>
+
   <!-- ============ group ============ -->
   <section id="groupView" class="hide">
     <div class="card">
@@ -355,6 +368,7 @@
       <div class="col">
         <div id="gQuestions"></div>
         <section class="card" id="gPlanCard"><h2>Plan</h2><div id="gPlan"></div></section>
+        <section class="card" id="gSaveCard"><h2>Save, share &amp; export</h2><div id="gSaveBody"><p class="sub">Accept a plan to export or share it.</p></div></section>
       </div>
     </div>
   </section>
@@ -412,6 +426,16 @@
             <div class="ctl"><label class="lbl" for="budSel">Change budget (USD)</label>
               <div class="line"><input id="budSel" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 30"><button class="small" id="budBtn">Replan</button></div>
               <label class="check"><input id="budNo" type="checkbox"> No budget limit</label></div>
+            <details class="hist" id="saveBox"><summary>Save, share &amp; export</summary>
+              <div class="ctl"><span class="lbl">Directions (Google Maps)</span><div id="dirLinks"></div>
+                <button class="small ghost" id="icsBtn" type="button">Download calendar (.ics)</button></div>
+              <div class="ctl"><span class="lbl">Share a read-only link</span>
+                <div class="shareurl"><input id="shareUrl" type="text" readonly aria-label="Share link" placeholder="No link yet"><button class="small" id="shareCopy" type="button" disabled>Copy</button></div>
+                <button class="small ghost" id="shareToggle" type="button">Create link</button>
+                <p class="help" id="shareMsg">Anyone with the link sees stops and times only. No budget, start location or personal details.</p></div>
+              <div class="ctl"><span class="lbl">History</span><ul class="mlist" id="histList"></ul></div>
+              <button class="small danger" id="delTrip" type="button">Delete this trip and its data</button>
+            </details>
             <details class="hist"><summary>What the agent did</summary><ol class="feed" id="feedHist"></ol></details>
           </div>
         </details>
@@ -527,17 +551,18 @@ function getLocation() {
 }
 
 /* ---------- API helper ---------- */
-async function api(path, body) {
+async function api(path, body, method) {
   let r;
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, S.ownerToken ? { Authorization: 'Bearer ' + S.ownerToken } : {});
   try {
-    r = await fetch(path, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    r = await fetch(path, { method: method || (body === undefined ? 'GET' : 'POST'), headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch (e) { throw new Error("Couldn't reach the server. Make sure it is running, then try again."); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const d = typeof j.detail === 'string' ? j.detail : Array.isArray(j.detail) ? 'Check the form values.' : 'The server rejected the request.';
     const e = new Error(r.status === 429 ? 'The planner is busy with another run. Wait for it to finish, then try again.'
       : r.status === 503 ? 'The AI planner is not connected (no model configured on the server).' : d);
-    e.status = r.status; throw e;
+    e.status = r.status; e.body = j; throw e;
   }
   return j;
 }
@@ -565,7 +590,9 @@ async function startPlan() {
   beginRun('The agent is working');
   try {
     const j = await api('/api/plans', readForm());
-    S.tripId = j.trip_id; track(j.run_id);
+    S.tripId = j.trip_id; S.ownerToken = j.owner_token;
+    lsSet(soloKey(j.trip_id), j.owner_token); lsSet('sq-last-trip', j.trip_id);
+    track(j.run_id);
   } catch (e) { endRun(); showCompose(); formMsg(e.message, 'field-err'); $('go').disabled = !S.pos; }
 }
 
@@ -626,6 +653,7 @@ function showResult(res, opts) {
       cancelled: 'The run was cancelled.', model_error: 'The AI planner had an error. Try again in a moment.' };
     if (!res.clarification) put('notice', notice('warn', 'alert', res.message || msgs[res.status] || 'The planner did not produce a plan.'));
   }
+  if (!S.replay) refreshSaveBox();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1048,6 +1076,7 @@ function renderGroup(st) {
   if (!G.built) { buildGroupForm(st.me.inputs); G.built = true; }
   if (gChanged('questions', st.questions)) renderQuestions(st);
   if (gChanged('plan', [st.run, st.candidate, st.accepted, st.needs_replan, st.group.version])) renderGroupPlan(st);
+  if (gChanged('save', [st.accepted && st.accepted.seq, st.candidate && st.candidate.seq, st.share_token, st.me.role])) renderGroupSave(st);
 }
 
 function renderMembers(st) {
@@ -1202,6 +1231,126 @@ async function decideGroup(which) {
   catch (e) { put('gPlan', notice('err', 'alert', e.message)); G.sig = {}; setTimeout(gPoll, 2500); }
 }
 
+/* =====================================================================
+   SAVED PLANS: history, restore, share, export, delete (solo and group).
+   Plans are saved on the server; this browser keeps only its own owner / member token.
+   ===================================================================== */
+const soloKey = id => 'sq-solo-' + id;
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+function safeLink(url, text) { return (url && /^https:\/\//.test(url)) ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, text) : null; }
+async function downloadWithAuth(path, filename, token) {
+  const r = await fetch(path, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+  if (!r.ok) throw new Error('Could not download the file (' + r.status + ').');
+  const url = URL.createObjectURL(await r.blob());
+  const a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+const KIND_LABEL = { plan: 'first plan', replan: 'change', proposal: 'proposal' };
+function historyRows(versions, onRestore) {
+  if (!versions.length) return [h('li', { class: 'help' }, 'No saved versions yet.')];
+  return versions.map(v => h('li', { class: 'mem' },
+    h('div', { class: 'top' }, h('strong', null, 'Version ' + v.seq), h('span', { class: 'mini ' + (v.current ? 'ok' : '') }, v.current ? 'current' : v.status),
+      h('span', { class: 'mini' }, v.kind === 'restore' ? 'restored from v' + v.restored_from : (KIND_LABEL[v.kind] || v.kind))),
+    h('div', { class: 'help' }, (v.stops || []).join(' → ') || 'no stops'), v.change ? h('div', { class: 'help' }, v.change) : null,
+    (onRestore && !v.current && v.kind !== 'proposal' && v.status !== 'rejected')
+      ? h('div', { class: 'actions' }, h('button', { class: 'small ghost', type: 'button', onclick: () => onRestore(v.seq) }, ic('refresh'), 'Restore this version')) : null));
+}
+function shareUrl(token) { return location.origin + location.pathname + '?share=' + token; }
+
+/* ---- solo ---- */
+function setShare(token) {
+  $('shareUrl').value = token ? shareUrl(token) : ''; $('shareCopy').disabled = !token;
+  $('shareToggle').textContent = token ? 'Revoke link' : 'Create link';
+}
+async function refreshSaveBox() {
+  const live = !S.replay && S.tripId && S.ownerToken;
+  $('saveBox').classList.toggle('hide', !live);
+  if (!live) return;
+  const p = questPlan(), links = (p && p.directions) || [], dl = clear('dirLinks');
+  if (links.length) dl.append(h('ul', { class: 'dirlist' }, links.map(d => h('li', null, safeLink(d.url, d.label) || d.label))));
+  else dl.append(h('span', { class: 'help' }, 'No directions links for this plan.'));
+  try {
+    const [hist, trip] = await Promise.all([api('/api/trips/' + S.tripId + '/history'), api('/api/trips/' + S.tripId)]);
+    put('histList', historyRows(hist.versions, restoreVersion)); setShare(trip.share_token);
+  } catch (e) { $('shareMsg').textContent = e.message; }
+}
+async function restoreVersion(seq) {
+  if (!confirm('Restore version ' + seq + '? It is re-checked against your current time and budget, then saved as a new version.')) return;
+  try { const j = await api('/api/trips/' + S.tripId + '/restore', { seq }); S.current = null; showResult(j.result, {}); }
+  catch (e) {
+    const more = e.body && e.body.issues ? ' ' + e.body.issues.map(i => i.message).join(' ') : '';
+    put('notice', notice('err', 'alert', e.message + more));
+  }
+}
+$('icsBtn').onclick = () => downloadWithAuth('/api/trips/' + S.tripId + '/export.ics', 'sidequest-plan.ics', S.ownerToken).catch(e => put('notice', notice('err', 'alert', e.message)));
+$('shareToggle').onclick = async () => {
+  const enable = $('shareToggle').textContent.startsWith('Create');
+  try { const j = await api('/api/trips/' + S.tripId + '/share', { enabled: enable }); setShare(j.share_token); } catch (e) { $('shareMsg').textContent = e.message; }
+};
+$('shareCopy').onclick = async () => { try { await navigator.clipboard.writeText($('shareUrl').value); $('shareMsg').textContent = 'Link copied.'; } catch (e) { $('shareUrl').select(); } };
+$('delTrip').onclick = async () => {
+  if (!confirm('Delete this trip, its history and any share link? This cannot be undone.')) return;
+  try {
+    await api('/api/trips/' + S.tripId, undefined, 'DELETE');
+    lsDel(soloKey(S.tripId)); lsDel('sq-last-trip'); stopQuest();
+    S.current = S.view = S.tripId = S.ownerToken = null; showCompose(); $('go').disabled = !S.pos;
+  } catch (e) { put('notice', notice('err', 'alert', e.message)); }
+};
+async function resumeLastTrip() {
+  const id = lsGet('sq-last-trip'), tok = id && lsGet(soloKey(id));
+  if (!id || !tok) return;
+  S.ownerToken = tok;
+  try { const j = await api('/api/trips/' + id); if (!j.result) throw new Error('empty'); S.current = null; showResult(j.result, {}); }
+  catch (e) { S.ownerToken = null; lsDel('sq-last-trip'); lsDel(soloKey(id)); }
+}
+
+/* ---- read-only shared page ---- */
+async function showShare(token) {
+  ['compose', 'working', 'workspace', 'groupView', 'joinView'].forEach(hide); show('shareView'); hide('newBtn');
+  $('modeChip').textContent = 'Shared'; $('modeChip').className = 'chip brand';
+  try {
+    const r = await fetch('/api/shared/' + encodeURIComponent(token));
+    const v = await r.json();
+    if (!r.ok) throw new Error(typeof v.detail === 'string' ? v.detail : 'This link is not available.');
+    document.title = 'SideQuest — ' + v.title;
+    $('shTitle').textContent = v.title; $('shMeta').textContent = [v.date, v.window].filter(Boolean).join(' · ');
+    put('shBadges', h('span', { class: 'badge b-info' }, ic('shield'), 'Read-only view'), v.synthetic ? h('span', { class: 'badge b-demo' }, 'DEMO DATA') : null,
+      h('span', { class: 'badge b-' + (v.confidence === 'verified' ? 'checked' : 'provisional') }, ({ verified: 'Facts verified', community_data: 'Based on community map data', mixed: 'Partly community map data' }[v.confidence]) || 'Checked'));
+    put('shStops', v.blocks.map(b => h('div', { class: 'stopline' }, h('strong', null, b.start + '–' + b.end),
+      h('div', null, h('strong', null, b.name), h('div', { class: 'chips' }, h('span', { class: 'mini' }, ic('wallet'), b.cost || ''), (b.facts || []).map(factChip).filter(Boolean))))));
+    put('shVerify', verifyBlock(v.verify));
+    put('shDirs', (v.directions || []).length ? h('div', { class: 'ctl', style: 'margin-top:12px' }, h('span', { class: 'lbl' }, 'Directions (Google Maps)'),
+      h('ul', { class: 'dirlist' }, v.directions.map(d => h('li', null, safeLink(d.url, d.label) || d.label)))) : null);
+    put('shNotes', (v.notes || []).map(n => h('div', { class: 'note' }, ic('shield'), h('span', null, n))));
+    $('shNote').textContent = v.shared_note;
+    $('shIcs').href = '/api/shared/' + encodeURIComponent(token) + '/export.ics'; $('shIcs').setAttribute('download', 'sidequest-plan.ics'); show('shIcs');
+  } catch (e) { $('shTitle').textContent = 'Link not available'; $('shMeta').textContent = e.message; }
+}
+
+/* ---- group: save / share / export / delete ---- */
+async function renderGroupSave(st) {
+  const org = st.me.role === 'organizer', kids = [];
+  const fail = e => put('gPlan', notice('err', 'alert', e.message));
+  if (st.accepted) kids.push(h('button', { class: 'small ghost', type: 'button', onclick: () => downloadWithAuth('/api/groups/' + G.gid + '/export.ics', 'sidequest-group-plan.ics', G.token).catch(fail) }, ic('clock'), 'Download calendar (.ics)'));
+  if (org && st.accepted) {
+    const url = h('input', { type: 'text', readonly: true, 'aria-label': 'Share link', value: st.share_token ? shareUrl(st.share_token) : '', placeholder: 'No link yet' });
+    kids.push(h('div', { class: 'ctl', style: 'margin-top:12px' }, h('span', { class: 'lbl' }, 'Share a read-only link'),
+      h('div', { class: 'shareurl' }, url, h('button', { class: 'small', type: 'button', disabled: !st.share_token, onclick: () => navigator.clipboard.writeText(url.value).catch(() => url.select()) }, 'Copy')),
+      h('button', { class: 'small ghost', type: 'button', onclick: async () => { try { await gapi('/api/groups/' + G.gid + '/share', 'POST', { enabled: !st.share_token }); G.sig = {}; gPoll(); } catch (e) { fail(e); } } }, st.share_token ? 'Revoke link' : 'Create link'),
+      h('p', { class: 'help' }, 'The shared page shows stops and times only: no names, budgets or locations.')));
+  }
+  try {
+    const hist = await gapi('/api/groups/' + G.gid + '/history');
+    kids.push(h('div', { class: 'ctl', style: 'margin-top:12px' }, h('span', { class: 'lbl' }, 'History'), h('ul', { class: 'mlist' }, historyRows(hist.versions, null))));
+  } catch (e) { /* history is optional */ }
+  if (org) kids.push(h('button', { class: 'small danger', type: 'button', style: 'margin-top:12px', onclick: async () => {
+    if (!confirm('Delete this group, everyone\u2019s saved inputs, all plans and any share link? This cannot be undone.')) return;
+    try { await gapi('/api/groups/' + G.gid, 'DELETE'); lsDel(gTokenKey(G.gid)); location.href = location.pathname; } catch (e) { fail(e); } } }, ic('trash'), 'Delete this group and its data'));
+  put('gSaveBody', kids.length ? kids : [h('p', { class: 'sub' }, 'Accept a plan to export or share it.')]);
+}
+
 /* ---------- boot ---------- */
 function boot() {
   put('markIc', ic('compass')); put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Share my location');
@@ -1221,7 +1370,8 @@ function boot() {
   const q = new URLSearchParams(location.search);
   if (!REPLAY && q.get('join')) { showJoin(q.get('join')); return; }
   if (!REPLAY && q.get('g')) { enterGroup(q.get('g')); return; }
-  if (REPLAY) initReplay(); else getLocation();
+  if (!REPLAY && q.get('share')) { showShare(q.get('share')); return; }
+  if (REPLAY) initReplay(); else { getLocation(); resumeLastTrip(); }
 }
 boot();
 </script>

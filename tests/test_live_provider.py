@@ -90,3 +90,53 @@ def test_every_overpass_server_failing_is_still_a_labeled_error():
     with pytest.raises(ProviderError) as exc:
         _world(httpx.Client(transport=httpx.MockTransport(handler))).search(category="", query="", limit=5)
     assert exc.value.kind == "unavailable"
+
+
+# --- saved copy of places (survives an Overpass outage) -------------------------------------
+
+from server.providers.placecache import PlaceCache  # noqa: E402
+
+_CAFE = {"type": "node", "id": 7, "lat": 44.971, "lon": -93.261, "tags": {"amenity": "cafe", "name": "Saved Cafe"}}
+
+
+def _cached_world(handler, cache, wall):
+    return LiveWorld(lat=44.97, lon=-93.26, tz="America/Chicago", origin_id="here", now=datetime.now(UTC),
+                     client=httpx.Client(transport=httpx.MockTransport(handler)), cache=cache, wall=wall)
+
+
+def test_a_fresh_saved_copy_is_used_without_calling_overpass():
+    cache, calls = PlaceCache(), []
+
+    def ok(req):
+        calls.append(1)
+        return httpx.Response(200, json={"elements": [_CAFE]})
+
+    _cached_world(ok, cache, lambda: 1000.0).search(category="food", query="", limit=5)
+    w2 = _cached_world(lambda r: (_ for _ in ()).throw(AssertionError("must not call")), cache, lambda: 1000.0 + 3600)
+    assert [p.name for p in w2.search(category="food", query="", limit=5)] == ["Saved Cafe"]
+    assert len(calls) == 1 and w2.data_notes() == []  # fresh: no staleness warning
+
+
+def test_an_old_saved_copy_is_served_when_overpass_fails_and_it_says_so():
+    cache = PlaceCache()
+    _cached_world(lambda r: httpx.Response(200, json={"elements": [_CAFE]}), cache, lambda: 1000.0).search(category="", query="", limit=5)
+
+    def down(req):
+        raise httpx.ConnectError("blocked")
+
+    later = 1000.0 + 3 * 24 * 3600  # older than the freshness window, younger than the stale limit
+    w = _cached_world(down, cache, lambda: later)
+    assert [p.name for p in w.search(category="food", query="", limit=5)] == ["Saved Cafe"]
+    assert w.data_notes() and "saved copy" in w.data_notes()[0]
+
+
+def test_without_any_saved_copy_an_outage_is_still_an_error():
+    def down(req):
+        raise httpx.ConnectError("blocked")
+
+    with pytest.raises(ProviderError):
+        _cached_world(down, PlaceCache(), lambda: 5.0).search(category="", query="", limit=5)
+    cache = PlaceCache()
+    cache.put("v2:44.970,-93.260,2000", [_CAFE], 0.0)  # far too old to trust
+    with pytest.raises(ProviderError):
+        _cached_world(down, cache, lambda: 60 * 24 * 3600.0).search(category="", query="", limit=5)

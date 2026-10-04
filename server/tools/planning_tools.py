@@ -81,6 +81,7 @@ def _provider_error(exc: ProviderError) -> ToolOutput:
 
 
 def _envelope(ctx: ToolContext, source: str, synthetic: bool, limitations: list[str], **data: Any) -> dict:
+    limitations = [*limitations, *getattr(ctx.places, "data_notes", lambda: [])()]  # e.g. places came from a saved copy
     return {"source": source, "synthetic": synthetic, "retrieved_at": ctx.now.isoformat(),
             "limitations": limitations, **data}
 

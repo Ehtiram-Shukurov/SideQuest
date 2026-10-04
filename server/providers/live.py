@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import re
+import time as _time
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -22,6 +23,7 @@ from server.models import Cost, Evidence, Place, TimeWindow
 from server.models.weather import ForecastPeriod
 from server.planning.assemble import LegEstimate
 
+from .placecache import PlaceCache
 from .base import PlaceDetails, PlaceSummary, ProviderError, category_for_words
 from .synthetic import SPEED_KMH, _haversine_m
 
@@ -40,6 +42,8 @@ CATEGORIES = {
     "culture": ("tourism", {"museum", "gallery", "attraction"}),
 }
 # (typical, minimum) visit minutes by OSM value
+PLACE_FRESH_S = 24 * 3600  # a cached answer this young is used without asking Overpass
+PLACE_STALE_MAX_S = 30 * 24 * 3600  # an older one is used only when Overpass fails
 PER_CATEGORY = 40  # results kept per category from Overpass
 DURATIONS = {"cafe": (45, 20), "restaurant": (60, 30), "ice_cream": (20, 10), "fast_food": (30, 15),
              "park": (45, 20), "garden": (40, 15), "viewpoint": (20, 10), "museum": (90, 45),
@@ -110,13 +114,15 @@ class LiveWorld:
     horizon_days = 7
 
     def __init__(self, *, lat: float, lon: float, tz: str, origin_id: str, now: datetime,
-                 radius_m: int = 2000, client: httpx.Client | None = None, routing: Any = None):
+                 radius_m: int = 2000, client: httpx.Client | None = None, routing: Any = None,
+                 cache: PlaceCache | None = None, wall: Any = _time.time):
         self._lat, self._lon, self._tz, self._origin_id = lat, lon, ZoneInfo(tz), origin_id
         self._now = now.astimezone(UTC)
         self._radius = radius_m
         self._client = client or make_client(timeout=25.0, headers={"User-Agent": USER_AGENT})
         self._elements: dict[str, dict] | None = None
         self._points: dict[str, tuple[float, float]] = {origin_id: (lat, lon)}
+        self._cache, self._wall, self._stale_at = cache, wall, None
         self._routing = routing  # a FossgisRouting, or None for straight-line estimates only
         self.name = "OpenStreetMap + Open-Meteo" + ("" if routing else " (route times are estimates)")
 
@@ -126,15 +132,21 @@ class LiveWorld:
 
     # --- places (Overpass) -------------------------------------------------------
 
-    def _load(self) -> dict[str, dict]:
-        if self._elements is not None:
-            return self._elements
+    def data_notes(self) -> list[str]:
+        """Said to the model and shown on the plan when the places are not fresh."""
+        if self._stale_at is None:
+            return []
+        when = datetime.fromtimestamp(self._stale_at, UTC).astimezone(self._tz)
+        return [f"The live OpenStreetMap places service was unavailable, so places come from a saved copy "
+                f"from {when:%Y-%m-%d %H:%M}. Venues may have changed or closed."]
+
+    def _fetch_elements(self, lat: float, lon: float) -> list[dict]:
         # One request, but a separate capped `out` per category: a single shared cap let a dense block of
         # cafes crowd every park out of the answer (found with a real run near a university).
         parts = []
         for i, (key, vals) in enumerate(CATEGORIES.values()):
             rx = "|".join(sorted(vals))
-            parts.append(f'nwr(around:{self._radius},{self._lat},{self._lon})["{key}"~"^({rx})$"]["name"]->.c{i};.c{i} out center {PER_CATEGORY};')
+            parts.append(f'nwr(around:{self._radius},{lat},{lon})["{key}"~"^({rx})$"]["name"]->.c{i};.c{i} out center {PER_CATEGORY};')
         query = f"[out:json][timeout:25];{''.join(parts)}"
         resp, failure, kind = None, "", "unavailable"
         for url in (OVERPASS_URL, *OVERPASS_FALLBACKS):
@@ -154,18 +166,37 @@ class LiveWorld:
         if resp.status_code != 200:
             raise ProviderError("unavailable", f"Overpass returned {resp.status_code}")
         try:
-            body = resp.json()
-        except ValueError:
+            return list(resp.json().get("elements", []))
+        except (ValueError, AttributeError):
             raise ProviderError("unavailable", "Overpass returned an unreadable response") from None
+
+    def _load(self) -> dict[str, dict]:
+        if self._elements is not None:
+            return self._elements
+        lat, lon = round(self._lat, 3), round(self._lon, 3)  # ~100 m: the same spot reuses a saved answer
+        key = f"v2:{lat:.3f},{lon:.3f},{self._radius}"
+        now = self._wall()
+        cached = self._cache.get(key) if self._cache else None
+        if cached and now - cached[1] < PLACE_FRESH_S:
+            raw = cached[0]
+        else:
+            try:
+                raw = self._fetch_elements(lat, lon)
+                if self._cache:
+                    self._cache.put(key, raw, now)
+            except ProviderError:
+                if not cached or now - cached[1] > PLACE_STALE_MAX_S:
+                    raise
+                raw, self._stale_at = cached[0], cached[1]
         els: dict[str, dict] = {}
-        for e in body.get("elements", []):
-            lat = e.get("lat") or (e.get("center") or {}).get("lat")
-            lon = e.get("lon") or (e.get("center") or {}).get("lon")
-            if lat is None or lon is None:
+        for e in raw:
+            elat = e.get("lat") or (e.get("center") or {}).get("lat")
+            elon = e.get("lon") or (e.get("center") or {}).get("lon")
+            if elat is None or elon is None:
                 continue
             pid = f"osm-{e['type']}-{e['id']}"
-            els[pid] = {"tags": e.get("tags", {}), "lat": lat, "lon": lon, "type": e["type"], "osm_id": e["id"]}
-            self._points[pid] = (lat, lon)
+            els[pid] = {"tags": e.get("tags", {}), "lat": elat, "lon": elon, "type": e["type"], "osm_id": e["id"]}
+            self._points[pid] = (elat, elon)
         self._elements = els
         return els
 

@@ -1,265 +1,789 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SideQuest — turn free time into a plan</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='13' fill='%23c2410c'/%3E%3Ccircle cx='24' cy='24' r='14' fill='none' stroke='%23fff' stroke-opacity='.6' stroke-width='2'/%3E%3Cpath d='M24 12.5l4.6 11.5H19.4z' fill='%23fff'/%3E%3Cpath d='M24 35.5L19.4 24h9.2z' fill='%23fff' fill-opacity='.5'/%3E%3Ccircle cx='37' cy='37' r='8' fill='%230e7490' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E">
-<meta name="theme-color" content="#faf4e8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b1620" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="/static/app.css">
-</head>
-<body data-tab="plan">
-<div class="bg" id="bg" aria-hidden="true"><div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div><svg id="topo" class="topo" preserveAspectRatio="xMidYMid slice"></svg></div>
-<a class="skip" href="#main">Skip to content</a>
-<div id="replayBanner" role="alert"><div class="inner">REPLAY — recorded run, not a live agent run</div></div>
-
-<header class="top" id="top">
-  <a class="brand" href="/" aria-label="SideQuest home"><span class="mark" id="markIc"><svg class="logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-  <defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a4d"/><stop offset="1" stop-color="#b93a08"/></linearGradient></defs>
-  <rect width="48" height="48" rx="13" fill="url(#lg1)"/>
-  <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
-  <g class="ticks" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M24 7v3M24 38v3M7 24h3M38 24h3"/></g>
-  <g class="needle"><path d="M24 12.5l4.6 11.5H19.4z" fill="#fff"/><path d="M24 35.5L19.4 24h9.2z" fill="#fff" fill-opacity=".45"/><circle cx="24" cy="24" r="2.2" fill="#b93a08"/></g>
-  <circle cx="37" cy="37" r="8" fill="#0e7490" stroke="#fff" stroke-width="2"/><path d="M33.4 37.2l2.6 2.6 4.6-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg></span><span class="word"><span class="wm">Side<span class="q">Quest</span></span><small class="tag">AI proposes. Code checks.</small></span></a>
-  <div class="spacer"></div>
-  <span class="chip ok live" id="modeChip"><i class="pulse"></i>Live</span>
-  <button class="icon ghost hide" id="newBtn" aria-label="Start a new plan" title="New plan"></button>
-  <button class="icon ghost" id="themeBtn" aria-label="Switch colour theme" title="Switch theme"></button>
-</header>
-
-<main id="main">
-  <!-- ============ compose ============ -->
-  <section id="compose" class="compose">
-    <div class="hero">
-      <p class="eyebrow"><i class="pulse"></i>AI proposes · code checks · you decide</p>
-      <h1>Turn free time into a <span class="rotwrap"><span class="sr-only">checked</span><span class="rot" id="rot" aria-hidden="true">checked</span></span> plan.</h1>
-      <p class="lead">Describe your outing. SideQuest finds real places nearby, times the routes, weighs your budget and the weather, and tells you plainly what it could not verify.</p>
-
-      <figure class="routeart" aria-hidden="true">
-        <svg viewBox="0 0 420 190" focusable="false">
-          <path class="rt-shadow" d="M34 150 C96 150 92 62 152 70 S 232 150 272 102 S 342 38 388 58"/>
-          <path class="rt-draw" id="rtPath" pathLength="1" d="M34 150 C96 150 92 62 152 70 S 232 150 272 102 S 342 38 388 58"/>
-          <g class="rt-node n1"><circle cx="34" cy="150" r="15"/><path d="M27 146h12v5a6 6 0 0 1-12 0z M39 147h2a2.5 2.5 0 0 1 0 5h-2"/></g>
-          <g class="rt-node n2"><circle cx="152" cy="70" r="15"/><path d="M152 79V67m0 0l-5 5m5-5l5 5m-5-5l-4-4m4 4l4-4"/></g>
-          <g class="rt-node n3"><circle cx="272" cy="102" r="15"/><path d="M266 95v10m0-10c2 2 2 5 0 7m7-9v13m4-13v5a3 3 0 0 1-4 0"/></g>
-          <g class="rt-node n4"><circle cx="388" cy="58" r="15"/><path d="M380 66h16m-14 0v-9m4 9v-9m4 9v-9m4 9v-9m-14-2l6-4 6 4z"/></g>
-          <circle class="rt-dot" r="5"><animateMotion dur="9s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1;1" keyTimes="0;.58;1"><mpath href="#rtPath"/></animateMotion></circle>
-        </svg>
-        <figcaption>Illustration of how a plan fits together. Not a real plan.</figcaption>
-      </figure>
-
-      <ol class="flow" aria-label="How SideQuest works">
-        <li><b>1</b><span>Describe</span></li><li><b>2</b><span>AI proposes</span></li><li><b>3</b><span>Code checks</span></li><li><b>4</b><span>You decide</span></li>
-      </ol>
-      <ul class="points" id="points"></ul>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SideQuest — turn free time into a plan</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="/static/assets/sidequest-icon.svg"
+    />
+    <meta
+      name="theme-color"
+      content="#F5F7F7"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#111C1E"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="description"
+      content="Make something of your free time. Plan an outing around your time, budget, and mood, on your own or with friends."
+    />
+    <link
+      rel="preload"
+      href="/static/assets/fonts/manrope-variable.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body data-tab="plan">
+    <a class="skip" href="#main">Skip to content</a>
+    <div id="replayBanner" role="alert">
+      <div class="inner">REPLAY — recorded run, not a live agent run</div>
     </div>
 
-    <form class="card" id="formCard" novalidate>
-      <h2 class="big" id="formTitle">Plan an outing</h2>
-      <p class="sub">Your location is required: it is how we find places and plan the way back.</p>
-      <div class="segmented" role="group" aria-label="Trip type">
-        <button type="button" id="modeSolo" aria-pressed="true">Just me</button>
-        <button type="button" id="modeGroup" aria-pressed="false">With a group</button>
-      </div>
-      <div class="group-only">
-        <label for="gTitleIn">Trip name</label><input id="gTitleIn" type="text" maxlength="80" placeholder="e.g. Saturday afternoon out">
-        <label for="gNameIn">Your name</label><input id="gNameIn" type="text" maxlength="40" placeholder="So friends know who you are">
-        <p class="help">Friends join with an invite link and add their own availability, budget and preferences. SideQuest finds the time that fits the most people.</p>
-      </div>
-      <div id="loc" class="loc bad" role="status"><span class="dot"></span><div><strong>Location required.</strong><small>We need your position to find places nearby.</small></div></div>
-      <button type="button" id="locBtn" class="secondary" style="margin-top:10px;width:100%"></button>
+    <header class="top" id="top">
+      <a class="brand" href="/" aria-label="SideQuest home"
+        ><span class="mark" id="markIc"
+          ><svg
+            class="logo"
+            viewBox="0 0 48 48"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <rect width="48" height="48" rx="14" fill="currentColor" />
+            <path
+              d="M33 14H20a7 7 0 0 0 0 14h8a5 5 0 0 1 0 10H15"
+              fill="none"
+              stroke="var(--brand-ink,white)"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+            <path
+              d="m28 9 5 5-5 5"
+              fill="none"
+              stroke="var(--brand-ink,white)"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle
+              cx="15"
+              cy="38"
+              r="3"
+              fill="var(--brand-ink,white)"
+            /></svg></span
+        ><span class="wm">SideQuest</span></a
+      >
+      <span class="header-note">A little time. A good plan.</span>
+      <div class="spacer"></div>
+      <span class="chip ok live" id="modeChip"><i class="pulse"></i>Live</span>
+      <button
+        class="icon ghost hide"
+        id="newBtn"
+        aria-label="Start a new plan"
+        title="New plan"
+      ></button>
+      <button
+        class="icon ghost"
+        id="themeBtn"
+        aria-label="Switch colour theme"
+        title="Switch theme"
+      ></button>
+    </header>
 
-      <label for="req">What do you feel like doing?</label>
-      <div class="examples" id="examples" role="group" aria-label="Example requests">
-        <button type="button" class="eg" data-text="Coffee, then a riverside or park walk, then lunch under $20. About 45 minutes each, walks under 15 minutes, back to start.">Coffee, walk, lunch</button>
-        <button type="button" class="eg" data-text="A quiet museum or gallery, then a cheap bite nearby. Keep walking short and finish in about 3 hours.">Museum afternoon</button>
-        <button type="button" class="eg" data-text="A scenic viewpoint, then a park, then dessert. Avoid rain if the forecast looks bad.">Views and dessert</button>
-        <button type="button" class="eg" data-text="A short bike loop with one coffee stop and one green space. Back to start within 2 hours.">Quick bike loop</button>
-      </div>
-      <textarea id="req" maxlength="500" aria-describedby="reqHelp reqErr">Coffee, then a riverside or park walk, then lunch under $20, then a museum or gallery. About 45 minutes each, walks under 15 minutes, back to start.</textarea>
-      <p class="help" id="reqHelp"><span id="reqCount">0</span>/500 characters</p>
-      <p class="field-err hide" id="reqErr" role="alert"></p>
-
-      <div class="row2 solo-only">
-        <div><label for="mins">Time available</label>
-          <select id="mins"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option>
-            <option value="180">3 hours</option><option value="240" selected>4 hours</option><option value="360">6 hours</option></select></div>
-        <div><label for="mode">Getting around</label>
-          <select id="mode"><option value="walk">Walk</option><option value="bike">Bike</option><option value="car">Car (I'm driving)</option></select></div>
-      </div>
-      <div class="row2 solo-only">
-        <div><label for="budget">Budget (USD)</label><input id="budget" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 40"></div>
-        <div><span class="lbl">&nbsp;</span><label class="check"><input id="nolimit" type="checkbox"> No budget limit</label></div>
-      </div>
-      <div class="row2">
-        <div class="solo-only"><label for="rain">Rain tolerance</label>
-          <select id="rain"><option value="">Don't mind rain</option><option value="60">Avoid likely rain (over 60%)</option>
-            <option value="40">Avoid possible rain (over 40%)</option><option value="20">Avoid any real chance (over 20%)</option></select></div>
-        <div><label for="data">Places data</label>
-          <select id="data"><option value="live">Live: real places</option><option value="demo">Demo: invented venues</option></select></div>
-      </div>
-      <button type="submit" id="go" disabled>Plan my outing</button>
-      <p id="msg" role="status" aria-live="polite"></p>
-    </form>
-  </section>
-
-  <!-- ============ join ============ -->
-  <section id="joinView" class="card hide" style="max-width:520px;margin:20px auto;width:100%">
-    <h1 class="big">Join a group trip</h1>
-    <p class="sub" id="joinTitle">Checking your invite…</p>
-    <label for="joinName">Your name</label>
-    <input id="joinName" type="text" maxlength="40" placeholder="So friends know who you are">
-    <button id="joinBtn" style="width:100%;margin-top:16px" disabled>Join</button>
-    <p id="joinMsg" class="field-err hide" role="alert"></p>
-  </section>
-
-  <!-- ============ shared (read-only) ============ -->
-  <section id="shareView" class="card hide" style="max-width:760px;margin:20px auto;width:100%">
-    <h1 class="big" id="shTitle">Shared plan</h1><p class="sub" id="shMeta"></p><div class="badges" id="shBadges"></div>
-    <div id="shStops" style="margin-top:12px"></div><div id="shVerify"></div><div id="shDirs"></div>
-    <div class="notes" id="shNotes"></div><p class="help" id="shNote"></p>
-    <a id="shIcs" class="hide" style="display:inline-block;margin-top:10px;font-weight:700;color:var(--brand)">Download calendar (.ics)</a>
-  </section>
-
-  <!-- ============ group ============ -->
-  <section id="groupView" class="hide">
-    <div class="card">
-      <div class="gtop-row"><div><h1 class="big" id="gTitle"></h1><p class="sub" id="gRequest"></p></div><span class="chip brand" id="gRole"></span></div>
-      <div class="invite hide" id="gInvite">
-        <span class="lbl" style="margin:0">Invite link (anyone with it can join)</span>
-        <div class="line"><input id="gInviteUrl" type="text" readonly aria-label="Invite link"><button class="small" id="gCopy" type="button">Copy</button></div>
-        <div class="line"><button class="small ghost" id="gInviteToggle" type="button">Revoke link</button><span class="help" id="gInviteMsg" style="align-self:center"></span></div>
-      </div>
-      <details class="hide" id="gEdit" style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center">Edit what you are planning</summary>
-        <textarea id="gReqIn" maxlength="500"></textarea><button class="small" id="gReqSave" type="button" style="margin-top:8px">Save</button></details>
-    </div>
-    <div class="ws" style="margin-top:16px">
-      <div class="col">
-        <section class="card"><h2>Who's in</h2><p class="sub">Everyone sees names, availability and interests. Budgets and needs stay private.</p><ul class="mlist" id="gMembers"></ul></section>
-        <form class="card" id="gForm" novalidate>
-          <h2>Your availability &amp; preferences</h2>
-          <p class="sub">Saved automatically for the group when you press Save. You can change it any time.</p>
-          <span class="lbl">When are you free?</span>
-          <div id="gWindows"></div>
-          <button type="button" class="small ghost" id="gAddWin" style="margin-top:8px">Add another time</button>
-          <div class="row2">
-            <div><label for="gBudget">Budget per person (USD)<span class="priv">Private</span></label><input id="gBudget" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 40"></div>
-            <div><span class="lbl">&nbsp;</span><label class="check"><input id="gNoLimit" type="checkbox"> No budget limit</label></div>
+    <main id="main">
+      <!-- ============ compose ============ -->
+      <section id="compose" class="compose">
+        <div class="hero">
+          <p class="eyebrow">YOUR TIME, WELL SPENT</p>
+          <h1>Make something<br />of your <span>free time.</span></h1>
+          <p class="lead">
+            Find a plan that fits your time, budget, and mood. On your own or
+            with friends.
+          </p>
+          <div class="editorial-note">
+            <span class="note-line" aria-hidden="true"></span>
+            <p>
+              A coffee around the corner.<br />A whole afternoon somewhere
+              new.<br /><strong>See where the day takes you.</strong>
+            </p>
           </div>
-          <span class="lbl">How can you get around?</span>
-          <div class="modes"><label class="check"><input type="checkbox" name="gmode" value="walk" checked> Walk</label>
-            <label class="check"><input type="checkbox" name="gmode" value="bike"> Bike</label>
-            <label class="check"><input type="checkbox" name="gmode" value="car"> Car</label></div>
-          <label for="gInterests">Interests (comma separated)</label><input id="gInterests" type="text" placeholder="coffee, hiking, museums">
-          <label for="gDiet">Dietary needs<span class="priv">Private</span></label><input id="gDiet" type="text" placeholder="e.g. vegetarian, nut allergy">
-          <div class="row2">
-            <div><span class="lbl">Access<span class="priv">Private</span></span><label class="check"><input id="gStepFree" type="checkbox"> I need step-free access</label></div>
-            <div><label for="gRain">Rain tolerance</label><select id="gRain"><option value="">Don't mind rain</option><option value="60">Avoid likely rain (over 60%)</option><option value="40">Avoid possible rain (over 40%)</option><option value="20">Avoid any real chance (over 20%)</option></select></div>
-          </div>
-          <button type="submit" id="gSave" style="margin-top:16px;width:100%">Save my availability</button>
-          <p id="gSaveMsg" class="help" role="status" aria-live="polite"></p>
-        </form>
-      </div>
-      <div class="col">
-        <div id="gQuestions"></div>
-        <section class="card" id="gPlanCard"><h2>Plan</h2><div id="gPlan"></div></section>
-        <section class="card" id="gSaveCard"><h2>Save, share &amp; export</h2><div id="gSaveBody"><p class="sub">Accept a plan to export or share it.</p></div></section>
-      </div>
-    </div>
-  </section>
+          <ul class="points" id="points"></ul>
+          <a class="replay-link" href="/?replay=1"
+            >Explore a recorded example <span aria-hidden="true">↗</span></a
+          >
+          <p class="help replay-caption">A recorded plan. No live AI run.</p>
+        </div>
 
-  <!-- ============ working ============ -->
-  <section id="working" class="card hide" aria-live="polite">
-    <div class="feedhead"><div class="radar" id="spinner" aria-hidden="true"><i></i><i></i><i></i><svg class="logo radar-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-  <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a4d"/><stop offset="1" stop-color="#b93a08"/></linearGradient></defs>
-  <rect width="48" height="48" rx="13" fill="url(#lg2)"/>
-  <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
-  <g class="ticks" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M24 7v3M24 38v3M7 24h3M38 24h3"/></g>
-  <g class="needle"><path d="M24 12.5l4.6 11.5H19.4z" fill="#fff"/><path d="M24 35.5L19.4 24h9.2z" fill="#fff" fill-opacity=".45"/><circle cx="24" cy="24" r="2.2" fill="#b93a08"/></g>
-  <circle cx="37" cy="37" r="8" fill="#0e7490" stroke="#fff" stroke-width="2"/><path d="M33.4 37.2l2.6 2.6 4.6-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg></div><div><h2 style="margin:0" id="workTitle">The agent is working</h2><p class="sub" style="margin:2px 0 0"><span id="workTimer" class="tabnum">0 s</span><span id="workNote"> · real tool calls as they happen, nothing here is scripted</span></p></div></div>
-    <ol class="feed" id="events"></ol>
-    <div class="skeleton" id="skeleton"><i></i><i></i></div>
-  </section>
-
-  <!-- ============ workspace ============ -->
-  <section id="workspace" class="hide">
-    <div class="tripbar" id="tripbar"></div>
-    <div class="ws">
-      <div class="col" data-pane="plan" id="colPlan">
-        <div id="notice"></div>
-        <div id="clarify"></div>
-        <div id="diffCard"></div>
-        <article class="card" id="planCard">
-          <h1 class="big" id="pTitle">Your plan</h1>
-          <div class="badges" id="pBadges"></div>
-          <div id="pGauge"></div>
-          <p class="expl" id="pExpl"></p>
-          <div id="spend"></div>
-          <p class="meta" id="pMeta"></p>
-          <ol class="timeline" id="timeline"></ol>
-          <div class="issues" id="issues"></div>
-          <div class="notes" id="notes"></div>
-        </article>
-      </div>
-      <aside class="side">
-        <section class="card" data-pane="map" id="mapCard">
-          <h2>Map</h2>
-          <div id="map" role="region" aria-label="Map of your stops"></div>
-          <div class="mapnote hide" id="mapNote"></div>
-          <div class="quest hide" id="quest">
-            <p class="nextline" id="questNext"></p>
-            <p class="sub" id="questInfo"></p>
-            <div class="actions"><button id="questBtn"></button><button id="arrivedBtn" class="secondary hide"></button></div>
-            <div class="privacy" id="privacy"></div>
+        <form class="card" id="formCard" novalidate>
+          <div class="form-heading">
+            <div>
+              <p class="eyebrow">LET’S GET YOU OUT THERE</p>
+              <h2 class="big" id="formTitle">What’s the plan?</h2>
+            </div>
+            <span class="form-number" aria-hidden="true">01 / GO</span>
           </div>
-        </section>
-        <details class="card assist" data-pane="assistant" id="assist" open>
-          <summary><span id="assistIc"></span>Assistant<span class="chev" id="chevIc"></span></summary>
-          <div class="inner">
-            <p class="sub" id="ctlHint"></p>
-            <div class="ctl"><label class="lbl" for="lateSel">I'm running late</label>
-              <div class="line"><select id="lateSel"><option value="10">10 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option></select>
-              <button class="small" id="lateBtn">Replan</button></div></div>
-            <div class="ctl"><label class="lbl" for="timeSel">Change total time</label>
-              <div class="line"><select id="timeSel"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option>
-                <option value="180">3 hours</option><option value="240">4 hours</option><option value="360">6 hours</option></select>
-              <button class="small" id="timeBtn">Replan</button></div></div>
-            <div class="ctl"><label class="lbl" for="budSel">Change budget (USD)</label>
-              <div class="line"><input id="budSel" type="number" min="0" step="1" inputmode="decimal" placeholder="e.g. 30"><button class="small" id="budBtn">Replan</button></div>
-              <label class="check"><input id="budNo" type="checkbox"> No budget limit</label></div>
-            <details class="hist" id="saveBox"><summary>Save, share &amp; export</summary>
-              <div class="ctl"><span class="lbl">Directions (Google Maps)</span><div id="dirLinks"></div>
-                <button class="small ghost" id="icsBtn" type="button">Download calendar (.ics)</button></div>
-              <div class="ctl"><span class="lbl">Share a read-only link</span>
-                <div class="shareurl"><input id="shareUrl" type="text" readonly aria-label="Share link" placeholder="No link yet"><button class="small" id="shareCopy" type="button" disabled>Copy</button></div>
-                <button class="small ghost" id="shareToggle" type="button">Create link</button>
-                <p class="help" id="shareMsg">Anyone with the link sees stops and times only. No budget, start location or personal details.</p></div>
-              <div class="ctl"><span class="lbl">History</span><ul class="mlist" id="histList"></ul></div>
-              <button class="small danger" id="delTrip" type="button">Delete this trip and its data</button>
+          <p class="sub" id="formSub">
+            A few details. An outing that feels like you.
+          </p>
+          <div class="segmented" role="group" aria-label="Trip type">
+            <button type="button" id="modeSolo" aria-pressed="true">
+              <span aria-hidden="true">◉</span> Solo
+            </button>
+            <button type="button" id="modeGroup" aria-pressed="false">
+              <span aria-hidden="true">◎</span> With friends
+            </button>
+          </div>
+          <div class="group-only">
+            <label for="gTitleIn">Trip name</label
+            ><input
+              id="gTitleIn"
+              type="text"
+              maxlength="80"
+              placeholder="e.g. Saturday afternoon out"
+            />
+            <label for="gNameIn">Your name</label
+            ><input
+              id="gNameIn"
+              type="text"
+              maxlength="40"
+              placeholder="So friends know who you are"
+            />
+            <p class="help">
+              Friends join with an invite link and add their own availability,
+              budget and preferences. SideQuest finds the time that fits the
+              most people.
+            </p>
+          </div>
+          <div class="location-block">
+            <div id="loc" class="loc" role="status">
+              <span class="dot"></span>
+              <div>
+                <strong>Where are we starting?</strong
+                ><small>Choose a starting point to find places nearby.</small>
+              </div>
+            </div>
+            <button type="button" id="locBtn" class="secondary"></button>
+            <details class="manual-location">
+              <summary>Or enter a starting point</summary>
+              <p class="help">
+                Paste latitude and longitude from a map pin. We’ll plan from
+                here, including the way back. Times use your device’s timezone.
+              </p>
+              <div class="row2">
+                <div>
+                  <label for="startLat">Latitude</label
+                  ><input
+                    aria-describedby="startErr"
+                    id="startLat"
+                    type="number"
+                    min="-90"
+                    max="90"
+                    step="any"
+                    placeholder="e.g. 44.9778"
+                  />
+                </div>
+                <div>
+                  <label for="startLon">Longitude</label
+                  ><input
+                    aria-describedby="startErr"
+                    id="startLon"
+                    type="number"
+                    min="-180"
+                    max="180"
+                    step="any"
+                    placeholder="e.g. -93.2650"
+                  />
+                </div>
+              </div>
+              <button type="button" id="useStart" class="small secondary">
+                Use this starting point
+              </button>
+              <p id="startErr" class="field-err hide" role="alert"></p>
             </details>
-            <details class="hist"><summary>What the agent did</summary><ol class="feed" id="feedHist"></ol></details>
           </div>
-        </details>
-      </aside>
-    </div>
-  </section>
-</main>
 
-<nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
-  <button role="tab" data-tab="plan" aria-selected="true" id="tabPlan"></button>
-  <button role="tab" data-tab="map" aria-selected="false" id="tabMap"></button>
-  <button role="tab" data-tab="assistant" aria-selected="false" id="tabAssist"></button>
-</nav>
-<footer><span class="fmark">SideQuest</span> hackathon MVP · plans are researched suggestions, not bookings · route times are estimates and each plan's notes say where they came from · map data © OpenStreetMap contributors</footer>
+          <label for="req">What do you feel like doing?</label>
+          <div
+            class="examples"
+            id="examples"
+            role="group"
+            aria-label="Example requests"
+          >
+            <button
+              type="button"
+              class="eg"
+              data-text="Coffee, then a riverside or park walk, then lunch under $20. About 45 minutes each, walks under 15 minutes, back to start."
+            >
+              Coffee, walk, lunch
+            </button>
+            <button
+              type="button"
+              class="eg"
+              data-text="A quiet museum or gallery, then a cheap bite nearby. Keep walking short and finish in about 3 hours."
+            >
+              Museum afternoon
+            </button>
+            <button
+              type="button"
+              class="eg"
+              data-text="A scenic viewpoint, then a park, then dessert. Avoid rain if the forecast looks bad."
+            >
+              Views and dessert
+            </button>
+            <button
+              type="button"
+              class="eg"
+              data-text="A short bike loop with one coffee stop and one green space. Back to start within 2 hours."
+            >
+              Quick bike loop
+            </button>
+          </div>
+          <textarea
+            id="req"
+            maxlength="500"
+            aria-describedby="reqHelp reqErr"
+            rows="3"
+            placeholder="I have a free afternoon. Find me good coffee, a park walk, and a cheap bite nearby."
+          ></textarea>
+          <p class="help request-help" id="reqHelp">
+            <span>Tell us what would make a good day.</span
+            ><span><span id="reqCount">0</span>/500</span>
+          </p>
+          <p class="field-err hide" id="reqErr" role="alert"></p>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="/static/app.js"></script>
-<script src="/static/fx.js"></script>
-</body>
+          <div class="planner-constraints solo-only">
+            <div>
+              <label for="mins">Time available</label>
+              <select id="mins">
+                <option value="60">1 hour</option>
+                <option value="90">1.5 hours</option>
+                <option value="120">2 hours</option>
+                <option value="180">3 hours</option>
+                <option value="240" selected>4 hours</option>
+                <option value="360">6 hours</option>
+              </select>
+            </div>
+            <div>
+              <label for="mode">Getting around</label>
+              <select id="mode">
+                <option value="walk">Walk</option>
+                <option value="bike">Bike</option>
+                <option value="car">Car</option>
+              </select>
+            </div>
+            <div class="budget-control">
+              <label for="budget">Outing budget (USD)</label
+              ><input
+                id="budget"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="decimal"
+                placeholder="e.g. 40"
+              /><label class="check"
+                ><input id="nolimit" type="checkbox" /> No limit</label
+              >
+            </div>
+          </div>
+          <details class="preferences solo-only">
+            <summary>
+              Weather preferences <span id="rainSummary">Don’t mind rain</span>
+            </summary>
+            <label for="rain">Rain tolerance</label
+            ><select id="rain">
+              <option value="">Don't mind rain</option>
+              <option value="60">Avoid likely rain (over 60%)</option>
+              <option value="40">Avoid possible rain (over 40%)</option>
+              <option value="20">Avoid any real chance (over 20%)</option>
+            </select>
+          </details>
+          <details class="preferences data-settings">
+            <summary>
+              Data settings <span id="dataSummary">Real places</span>
+            </summary>
+            <label for="data">Places data</label
+            ><select id="data">
+              <option value="live">Live: real places</option>
+              <option value="demo">Demo: invented venues</option>
+            </select>
+            <p class="help">
+              Demo uses invented venues to test the planner. Both modes need a
+              connected AI model.
+            </p>
+          </details>
+          <button type="submit" id="go" disabled>Plan my outing</button>
+          <p class="submit-note" id="submitNote">
+            Choose a starting point to begin.
+          </p>
+          <p id="msg" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <!-- ============ join ============ -->
+      <section
+        id="joinView"
+        class="card hide"
+        style="max-width: 520px; margin: 20px auto; width: 100%"
+      >
+        <h1 class="big">Join a group trip</h1>
+        <p class="sub" id="joinTitle">Checking your invite…</p>
+        <label for="joinName">Your name</label>
+        <input
+          id="joinName"
+          type="text"
+          maxlength="40"
+          placeholder="So friends know who you are"
+        />
+        <button id="joinBtn" style="width: 100%; margin-top: 16px" disabled>
+          Join
+        </button>
+        <p id="joinMsg" class="field-err hide" role="alert"></p>
+      </section>
+
+      <!-- ============ shared (read-only) ============ -->
+      <section
+        id="shareView"
+        class="card hide"
+        style="max-width: 760px; margin: 20px auto; width: 100%"
+      >
+        <h1 class="big" id="shTitle">Shared plan</h1>
+        <p class="sub" id="shMeta"></p>
+        <div class="badges" id="shBadges"></div>
+        <div id="shStops" style="margin-top: 12px"></div>
+        <div id="shVerify"></div>
+        <div id="shDirs"></div>
+        <div class="notes" id="shNotes"></div>
+        <p class="help" id="shNote"></p>
+        <a
+          id="shIcs"
+          class="hide"
+          style="
+            display: inline-block;
+            margin-top: 10px;
+            font-weight: 700;
+            color: var(--brand);
+          "
+          >Download calendar (.ics)</a
+        >
+      </section>
+
+      <!-- ============ group ============ -->
+      <section id="groupView" class="hide">
+        <div class="card">
+          <div class="gtop-row">
+            <div>
+              <h1 class="big" id="gTitle"></h1>
+              <p class="sub" id="gRequest"></p>
+            </div>
+            <span class="chip brand" id="gRole"></span>
+          </div>
+          <div class="invite hide" id="gInvite">
+            <span class="lbl" style="margin: 0"
+              >Invite link (anyone with it can join)</span
+            >
+            <div class="line">
+              <input
+                id="gInviteUrl"
+                type="text"
+                readonly
+                aria-label="Invite link"
+              /><button class="small" id="gCopy" type="button">Copy</button>
+            </div>
+            <div class="line">
+              <button class="small ghost" id="gInviteToggle" type="button">
+                Revoke link</button
+              ><span
+                class="help"
+                id="gInviteMsg"
+                style="align-self: center"
+              ></span>
+            </div>
+          </div>
+          <details class="hide" id="gEdit" style="margin-top: 12px">
+            <summary
+              style="
+                cursor: pointer;
+                font-weight: 700;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+              "
+            >
+              Edit what you are planning
+            </summary>
+            <label for="gReqIn">Outing description</label
+            ><textarea id="gReqIn" maxlength="500"></textarea
+            ><button
+              class="small"
+              id="gReqSave"
+              type="button"
+              style="margin-top: 8px"
+            >
+              Save
+            </button>
+          </details>
+        </div>
+        <div class="ws" style="margin-top: 16px">
+          <div class="col">
+            <section class="card">
+              <h2>Who's in</h2>
+              <p class="sub">
+                Everyone sees names, availability and interests. Budgets and
+                needs stay private.
+              </p>
+              <ul class="mlist" id="gMembers"></ul>
+            </section>
+            <form class="card" id="gForm" novalidate>
+              <h2>Your availability &amp; preferences</h2>
+              <p class="sub">
+                Share what works for you. You can update your preferences any
+                time.
+              </p>
+              <span class="lbl">When are you free?</span>
+              <div id="gWindows"></div>
+              <button
+                type="button"
+                class="small ghost"
+                id="gAddWin"
+                style="margin-top: 8px"
+              >
+                Add another time
+              </button>
+              <div class="row2">
+                <div>
+                  <label for="gBudget"
+                    >Budget per person (USD)<span class="priv"
+                      >Private</span
+                    ></label
+                  ><input
+                    id="gBudget"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="decimal"
+                    placeholder="e.g. 40"
+                  />
+                </div>
+                <div>
+                  <span class="lbl">&nbsp;</span
+                  ><label class="check"
+                    ><input id="gNoLimit" type="checkbox" /> No budget
+                    limit</label
+                  >
+                </div>
+              </div>
+              <span class="lbl">How can you get around?</span>
+              <div class="modes">
+                <label class="check"
+                  ><input type="checkbox" name="gmode" value="walk" checked />
+                  Walk</label
+                >
+                <label class="check"
+                  ><input type="checkbox" name="gmode" value="bike" />
+                  Bike</label
+                >
+                <label class="check"
+                  ><input type="checkbox" name="gmode" value="car" /> Car</label
+                >
+              </div>
+              <label for="gInterests">Interests (comma separated)</label
+              ><input
+                id="gInterests"
+                type="text"
+                placeholder="coffee, hiking, museums"
+              />
+              <label for="gDiet"
+                >Dietary needs<span class="priv">Private</span></label
+              ><input
+                id="gDiet"
+                type="text"
+                placeholder="e.g. vegetarian, nut allergy"
+              />
+              <div class="row2">
+                <div>
+                  <span class="lbl"
+                    >Access<span class="priv">Private</span></span
+                  ><label class="check"
+                    ><input id="gStepFree" type="checkbox" /> I need step-free
+                    access</label
+                  >
+                </div>
+                <div>
+                  <label for="gRain">Rain tolerance</label
+                  ><select id="gRain">
+                    <option value="">Don't mind rain</option>
+                    <option value="60">Avoid likely rain (over 60%)</option>
+                    <option value="40">Avoid possible rain (over 40%)</option>
+                    <option value="20">Avoid any real chance (over 20%)</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                type="submit"
+                id="gSave"
+                style="margin-top: 16px; width: 100%"
+              >
+                Save my availability
+              </button>
+              <p
+                id="gSaveMsg"
+                class="help"
+                role="status"
+                aria-live="polite"
+              ></p>
+            </form>
+          </div>
+          <div class="col">
+            <div id="gQuestions"></div>
+            <section class="card" id="gPlanCard">
+              <h2>Plan</h2>
+              <div id="gPlan"></div>
+            </section>
+            <section class="card" id="gSaveCard">
+              <h2>Save, share &amp; export</h2>
+              <div id="gSaveBody">
+                <p class="sub">Accept a plan to export or share it.</p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ working ============ -->
+      <section id="working" class="card hide" aria-live="polite">
+        <div class="feedhead">
+          <div class="radar" id="spinner" aria-hidden="true">
+            <i></i><i></i><i></i
+            ><svg
+              class="logo"
+              viewBox="0 0 48 48"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <rect width="48" height="48" rx="14" fill="currentColor" />
+              <path
+                d="M33 14H20a7 7 0 0 0 0 14h8a5 5 0 0 1 0 10H15"
+                fill="none"
+                stroke="var(--brand-ink,white)"
+                stroke-width="4"
+                stroke-linecap="round"
+              />
+              <path
+                d="m28 9 5 5-5 5"
+                fill="none"
+                stroke="var(--brand-ink,white)"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle cx="15" cy="38" r="3" fill="var(--brand-ink,white)" />
+            </svg>
+          </div>
+          <div>
+            <h2 style="margin: 0" id="workTitle">
+              Putting your outing together
+            </h2>
+            <p class="sub" style="margin: 2px 0 0">
+              <span id="workTimer" class="tabnum">0 s</span
+              ><span id="workNote">
+                · checking places, routes, and your preferences</span
+              >
+            </p>
+          </div>
+        </div>
+        <ol class="feed" id="events"></ol>
+        <div class="skeleton" id="skeleton"><i></i><i></i></div>
+      </section>
+
+      <!-- ============ workspace ============ -->
+      <section id="workspace" class="hide">
+        <div class="tripbar" id="tripbar"></div>
+        <div class="ws">
+          <div class="col" data-pane="plan" id="colPlan">
+            <div id="notice"></div>
+            <div id="clarify"></div>
+            <div id="diffCard"></div>
+            <article class="card" id="planCard">
+              <h1 class="big" id="pTitle">Your plan</h1>
+              <div class="badges" id="pBadges"></div>
+              <div id="pGauge"></div>
+              <p class="expl" id="pExpl"></p>
+              <div id="spend"></div>
+
+              <ol class="timeline" id="timeline"></ol>
+              <div class="issues" id="issues"></div>
+              <div class="notes" id="notes"></div>
+            </article>
+          </div>
+          <aside class="side">
+            <section class="card" data-pane="map" id="mapCard">
+              <h2>Your route</h2>
+              <div id="map" role="region" aria-label="Map of your stops"></div>
+              <div class="mapnote hide" id="mapNote"></div>
+              <div class="quest hide" id="quest">
+                <p class="nextline" id="questNext"></p>
+                <p class="sub" id="questInfo"></p>
+                <div class="actions">
+                  <button id="questBtn"></button
+                  ><button id="arrivedBtn" class="secondary hide"></button>
+                </div>
+                <div class="privacy" id="privacy"></div>
+              </div>
+            </section>
+            <details class="card assist" data-pane="assistant" id="assist" open>
+              <summary>
+                <span id="assistIc"></span>Adjust your plan<span
+                  class="chev"
+                  id="chevIc"
+                ></span>
+              </summary>
+              <div class="inner">
+                <p class="sub" id="ctlHint"></p>
+                <div class="ctl">
+                  <label class="lbl" for="lateSel">I'm running late</label>
+                  <div class="line">
+                    <select id="lateSel">
+                      <option value="10">10 minutes</option>
+                      <option value="20">20 minutes</option>
+                      <option value="30">30 minutes</option>
+                      <option value="45">45 minutes</option>
+                    </select>
+                    <button class="small" id="lateBtn">Replan</button>
+                  </div>
+                </div>
+                <div class="ctl">
+                  <label class="lbl" for="timeSel">Change total time</label>
+                  <div class="line">
+                    <select id="timeSel">
+                      <option value="60">1 hour</option>
+                      <option value="90">1.5 hours</option>
+                      <option value="120">2 hours</option>
+                      <option value="180">3 hours</option>
+                      <option value="240">4 hours</option>
+                      <option value="360">6 hours</option>
+                    </select>
+                    <button class="small" id="timeBtn">Replan</button>
+                  </div>
+                </div>
+                <div class="ctl">
+                  <label class="lbl" for="budSel">Change budget (USD)</label>
+                  <div class="line">
+                    <input
+                      id="budSel"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputmode="decimal"
+                      placeholder="e.g. 30"
+                    /><button class="small" id="budBtn">Replan</button>
+                  </div>
+                  <label class="check"
+                    ><input id="budNo" type="checkbox" /> No budget limit</label
+                  >
+                </div>
+                <details class="hist" id="saveBox">
+                  <summary>Save, share &amp; export</summary>
+                  <div class="ctl">
+                    <span class="lbl">Directions (Google Maps)</span>
+                    <div id="dirLinks"></div>
+                    <button class="small ghost" id="icsBtn" type="button">
+                      Download calendar (.ics)
+                    </button>
+                  </div>
+                  <div class="ctl">
+                    <span class="lbl">Share a read-only link</span>
+                    <div class="shareurl">
+                      <input
+                        id="shareUrl"
+                        type="text"
+                        readonly
+                        aria-label="Share link"
+                        placeholder="No link yet"
+                      /><button
+                        class="small"
+                        id="shareCopy"
+                        type="button"
+                        disabled
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <button class="small ghost" id="shareToggle" type="button">
+                      Create link
+                    </button>
+                    <p class="help" id="shareMsg">
+                      Anyone with the link sees stops and times only. No budget,
+                      start location or personal details.
+                    </p>
+                  </div>
+                  <div class="ctl">
+                    <span class="lbl">History</span>
+                    <ul class="mlist" id="histList"></ul>
+                  </div>
+                  <button class="small danger" id="delTrip" type="button">
+                    Delete this trip and its data
+                  </button>
+                </details>
+                <details class="hist">
+                  <summary>Planning activity</summary>
+                  <p class="meta" id="pMeta"></p>
+                  <ol class="feed" id="feedHist"></ol>
+                </details>
+              </div>
+            </details>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+      <button
+        role="tab"
+        data-tab="plan"
+        aria-selected="true"
+        id="tabPlan"
+        aria-controls="colPlan"
+        tabindex="0"
+      ></button>
+      <button
+        role="tab"
+        data-tab="map"
+        aria-selected="false"
+        id="tabMap"
+        aria-controls="mapCard"
+        tabindex="-1"
+      ></button>
+      <button
+        role="tab"
+        data-tab="assistant"
+        aria-selected="false"
+        id="tabAssist"
+        aria-controls="assist"
+        tabindex="-1"
+      ></button>
+    </nav>
+    <footer>
+      <div class="footer-brand">
+        <span class="fmark">SideQuest</span
+        ><span>Good days start somewhere.</span>
+      </div>
+      <p>
+        Plans are suggestions, not bookings. Route times are estimates; check
+        each plan’s notes for sources.
+      </p>
+      <span class="attribution">Map data © OpenStreetMap contributors</span>
+    </footer>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="/static/app.js"></script>
+    <script src="/static/fx.js"></script>
+  </body>
 </html>

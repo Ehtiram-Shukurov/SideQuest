@@ -319,8 +319,8 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
             except Exception as exc:  # never includes credentials
                 run.error = f"{type(exc).__name__}: {str(exc)[:200]}"
             finally:
+                busy.release()  # release first: a client that sees 'done' may start the next run at once
                 run.done = True
-                busy.release()
 
         threading.Thread(target=work, daemon=True).start()
         return run.id

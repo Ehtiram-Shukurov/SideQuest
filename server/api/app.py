@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 from server.agent.config import load_dotenv, provider_from_env
 from server.agent.model import ModelError, ModelProvider, ToolResult
 from server.agent.runner import RunLimits, run_agent, trip_snapshot
+from server.api.security import Hardening, install_log_redaction
 from server.groups.routes import register_groups
 from server.groups.store import Store
 from server.models import Evidence, Location, Member, Place, Plan, TimeWindow, Trip, local
@@ -311,6 +312,8 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
                db_path: str = ":memory:") -> FastAPI:
     load_dotenv()
     app = FastAPI(title="SideQuest MVP")
+    app.add_middleware(Hardening)  # headers + CSP, rate limits, size limits (no CORS on purpose)
+    install_log_redaction()  # tokens in URLs never reach the access log
     runs: dict[str, Run] = {}
     sessions: dict[str, TripSession] = {}
     busy = threading.Lock()  # one agent run at a time (solo and group share it)
@@ -426,8 +429,8 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
                 if kind == "replan":
                     restore(sess)
             finally:
+                busy.release()  # release first: a client that sees 'done' may start the next run at once
                 run.done = True
-                busy.release()
 
         threading.Thread(target=work, daemon=True).start()
         return run_id
@@ -729,6 +732,7 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
     def index() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
 
+    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
     app.mount("/fixtures", StaticFiles(directory=Path(__file__).resolve().parents[2] / "fixtures"),
               name="fixtures")
 

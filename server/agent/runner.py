@@ -21,7 +21,10 @@ from server.tools.registry import ToolOutput
 from .model import ModelError, ModelProvider, ModelSession, ToolResult
 
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
-DEFAULT_SKILLS = ("plan-and-validate.md",)
+# Focused skills, loaded in this order. The group skill is added only for group trips.
+DEFAULT_SKILLS = ("00-core.md", "10-interpret-constraints.md", "20-plan-fast.md", "30-repair-and-conflict.md",
+                  "40-confidence-and-explanation.md", "50-answers-and-replan.md")
+GROUP_SKILLS = ("60-group.md",)
 
 BASE_PROMPT = """You are SideQuest's planning agent. You turn a user's time, budget, transport and
 interests into an itinerary by calling tools. Code, not you, schedules and validates plans.
@@ -146,7 +149,8 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
     """Run the loop. Resume a paused conversation with `session` + `tool_results` (the answer to
     an ask_user call); start a fresh conversation with a custom first message via `opening`."""
     registry = build_registry(ctx)
-    system = BASE_PROMPT + "\n\n" + (skills if skills is not None else load_skills())
+    system = BASE_PROMPT + "\n\n" + (skills if skills is not None else load_skills(
+        DEFAULT_SKILLS + (GROUP_SKILLS if ctx.private_mode else ())))
     events: list[RunEvent] = []
     usage: dict[str, int] = {}
     calls = 0
@@ -200,7 +204,7 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
                 if calls >= limits.max_tool_calls:
                     emit("limit", f"Tool-call limit of {limits.max_tool_calls} reached")
                     return finish("limit_reached", "tool-call limit")
-                if call.name == "validate_plan" and ctx.validations_run >= limits.max_validations:
+                if call.name in ("validate_plan", "assemble_plan") and ctx.validations_run >= limits.max_validations:
                     emit("limit", f"Validation limit of {limits.max_validations} reached")
                     return finish("limit_reached", "validation limit")
                 calls += 1

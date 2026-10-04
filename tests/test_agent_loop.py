@@ -99,14 +99,15 @@ def test_invented_venue_ids_are_rejected_and_nothing_is_scheduled():
 
 def test_assembly_requires_details_and_routes_first():
     ctx = make_ctx(solo())
-    p = ScriptedProvider([tc("search_places", category="outdoor"),
+    p = ScriptedProvider([tc("search_places", category="outdoor", include_details=False),
                           tc("assemble_plan", place_ids=["lakeside-trail"], mode="walk"),
                           tc("get_place_details", place_ids=["lakeside-trail"]),
                           tc("assemble_plan", place_ids=["lakeside-trail"], mode="walk"),
                           tc("ask_user", question="?")])
     run_agent(provider=p, ctx=ctx, request="x")
     a = results_of(p, "assemble_plan")
-    assert a[0]["error"]["type"] == "missing_details" and a[1]["error"]["type"] == "missing_routes"
+    assert a[0]["error"]["type"] == "missing_details"  # facts are still required before scheduling
+    assert a[1]["feasible"] is True and not ctx.matrices.get("walk") == {}  # routes were estimated by the tool itself
 
 
 def test_unknown_price_makes_a_provisional_proposal_and_source_text_stays_data():
@@ -201,16 +202,28 @@ def test_text_only_reply_without_proposal_is_reported_as_such():
     assert res.status == "no_proposal" and res.message == "I can't decide."
 
 
-def test_skill_file_is_actually_loaded_into_the_system_prompt():
+def test_every_skill_file_is_loaded_into_the_system_prompt_and_none_is_orphaned():
+    from server.agent.runner import DEFAULT_SKILLS, GROUP_SKILLS, SKILLS_DIR
+
+    on_disk = {p.name for p in SKILLS_DIR.glob("*.md")}
+    assert on_disk == set(DEFAULT_SKILLS) | set(GROUP_SKILLS)  # no skill file is unused, none is missing
     p = ScriptedProvider([ModelTurn(text="done")])
     run_agent(provider=p, ctx=make_ctx(solo()), request="x")
     system = p.sessions[0].system
-    assert BASE_PROMPT in system and "Skill: plan, validate and repair" in system
+    assert BASE_PROMPT in system
+    for name in DEFAULT_SKILLS:  # every solo skill's full text is in the prompt
+        assert (SKILLS_DIR / name).read_text(encoding="utf-8").strip() in system.replace("\r\n", "\n")
+    assert "# Skill: group trips" not in system  # the group skill only loads for group trips
     assert {t.name for t in p.sessions[0].tools} == {
         "search_places", "get_place_details", "get_weather", "estimate_routes", "assemble_plan",
         "validate_plan", "save_proposal", "ask_user"}
     with pytest.raises(FileNotFoundError):
         load_skills(("nope.md",))
+    grp = make_ctx(solo())
+    grp.private_mode = True
+    pg = ScriptedProvider([ModelTurn(text="done")])
+    run_agent(provider=pg, ctx=grp, request="x")
+    assert "# Skill: group trips" in pg.sessions[0].system  # and it does load for them
 
 
 def test_first_message_flags_unknown_fields_instead_of_assuming():
@@ -241,3 +254,37 @@ def test_crashing_tool_returns_an_error_and_the_run_continues(monkeypatch):
     err = results_of(p, "search_places")[0]["error"]
     assert err["type"] == "tool_crash" and "ValueError" in err["message"]
     assert res.status == "needs_clarification"  # the run survived the crash
+
+
+def test_compact_protocol_plans_in_three_tool_calls_with_code_doing_routes_and_validation():
+    ctx = make_ctx(solo())
+    p = ScriptedProvider([tc("search_places", category="outdoor"),  # facts come back inline
+                          tc("assemble_plan", place_ids=["lakeside-trail"], mode="walk"),  # routes + validation in code
+                          tc("save_proposal", plan_id="plan-1", explanation="A walk.")])
+    res = run_agent(provider=p, ctx=ctx, request="Get outside")
+    assert res.status == "proposal_saved" and res.tool_calls == 3  # was 6 with the step-by-step protocol
+    first = results_of(p, "search_places")[0]["results"][0]
+    assert "hours" in first and "price" in first  # no separate get_place_details call needed
+    v = results_of(p, "assemble_plan")[0]["validation"]
+    assert v["overall"] == "checked" and res.proposal.plan.validation.overall == "checked"
+
+
+def test_assemble_fetches_the_forecast_itself_when_a_rain_limit_applies_and_still_gates_saving():
+    t = solo(avoid_rain_above=0.3)
+    ctx = make_ctx(t)
+    p = ScriptedProvider([tc("search_places", category="outdoor"),
+                          tc("assemble_plan", place_ids=["lakeside-trail"], mode="walk"),
+                          tc("save_proposal", plan_id="plan-1", explanation="Dry morning walk.")])
+    res = run_agent(provider=p, ctx=ctx, request="Walk")
+    assert ctx.forecast_retrieved and res.tool_calls == 3  # no get_weather call was needed
+    assert [c.status for c in res.proposal.plan.validation.by_code("WEATHER")] == ["pass"]
+
+    # an afternoon window has a 60% rain chance in the synthetic forecast: the plan must NOT be saveable
+    wet = make_ctx(solo(start=at(13), end=at(15), avoid_rain_above=0.3))
+    p2 = ScriptedProvider([tc("search_places", category="outdoor"),
+                           tc("assemble_plan", place_ids=["lakeside-trail"], mode="walk"),
+                           tc("save_proposal", plan_id="plan-1", explanation="Try anyway."),
+                           tc("ask_user", question="Too wet. Move the walk?")])
+    r2 = run_agent(provider=p2, ctx=wet, request="Walk")
+    assert results_of(p2, "assemble_plan")[0]["validation"]["overall"] == "failed"
+    assert results_of(p2, "save_proposal")[0]["error"]["type"] == "hard_check_failed" and r2.proposal is None

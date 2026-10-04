@@ -26,6 +26,7 @@ class LegEstimate:
     max_s: int
     distance_m: int | None = None
     evidence_id: str | None = None
+    source: str = "estimate"  # e.g. 'OpenStreetMap routing (FOSSGIS)' or 'straight-line estimate'
 
 
 TravelMatrix = Mapping[tuple[str, str], LegEstimate]

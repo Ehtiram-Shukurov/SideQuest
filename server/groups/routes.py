@@ -162,7 +162,7 @@ def member_from_inputs(row: dict[str, Any], inp: dict[str, Any], window: TimeWin
 
 def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[], ModelProvider],
                     now_fn: Callable[[], datetime], busy: threading.Lock, limits: RunLimits,
-                    proposal_json: Callable[[Proposal, ToolContext], dict[str, Any]]) -> None:
+                    proposal_json: Callable[[Proposal, ToolContext], dict[str, Any]], routing: Any = None) -> None:
     runtimes: dict[str, Runtime] = {}
 
     def rt(gid: str) -> Runtime:
@@ -300,7 +300,7 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
         def work() -> None:
             try:
                 world: Any = SyntheticWorld(trip, now=now) if group["data_mode"] == "demo" else LiveWorld(
-                    lat=group["lat"], lon=group["lon"], tz=group["tz"], origin_id="here", now=now)
+                    lat=group["lat"], lon=group["lon"], tz=group["tz"], origin_id="here", now=now, routing=routing)
                 ctx = ToolContext(trip=trip, places=world, routes=world, weather=world, now=now, private_mode=True)
                 res = run_agent(provider=provider, ctx=ctx, request=group["request"], limits=limits,
                                 on_event=lambda e: run.events.append({"seq": e.seq, "kind": e.kind, "summary": e.summary}))

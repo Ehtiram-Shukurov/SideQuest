@@ -1,5 +1,6 @@
 """Live, keyless data for the MVP: OpenStreetMap (Overpass) places, Open-Meteo forecast, and
-straight-line route ESTIMATES. Limitations are surfaced to the model and the user:
+route times (real OpenStreetMap routing via FOSSGIS when a routing client is given, otherwise
+straight-line ESTIMATES). Limitations are surfaced to the model and the user:
 
 * OSM hours/prices come from community tags and may be missing or stale. Unparseable hours stay
   UNKNOWN; a missing price stays UNKNOWN (only an explicit fee=no counts as free).
@@ -8,6 +9,7 @@ straight-line route ESTIMATES. Limitations are surfaced to the model and the use
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 import re
 from datetime import UTC, date, datetime, time, timedelta
@@ -105,13 +107,15 @@ class LiveWorld:
     horizon_days = 7
 
     def __init__(self, *, lat: float, lon: float, tz: str, origin_id: str, now: datetime,
-                 radius_m: int = 2000, client: httpx.Client | None = None):
+                 radius_m: int = 2000, client: httpx.Client | None = None, routing: Any = None):
         self._lat, self._lon, self._tz, self._origin_id = lat, lon, ZoneInfo(tz), origin_id
         self._now = now.astimezone(UTC)
         self._radius = radius_m
         self._client = client or make_client(timeout=25.0, headers={"User-Agent": USER_AGENT})
         self._elements: dict[str, dict] | None = None
         self._points: dict[str, tuple[float, float]] = {origin_id: (lat, lon)}
+        self._routing = routing  # a FossgisRouting, or None for straight-line estimates only
+        self.name = "OpenStreetMap + Open-Meteo" + ("" if routing else " (route times are estimates)")
 
     def register_points(self, points: dict[str, tuple[float, float]]) -> None:
         """Make already-known places routable without re-querying (used when a saved trip is restored)."""
@@ -217,7 +221,41 @@ class LiveWorld:
         base = dist / 1000 / SPEED_KMH[mode] * 3600
         extra = 300 if mode == "car" else 0
         return LegEstimate(mode=mode, min_s=int(round(base)) + extra, max_s=int(round(base * 1.3)) + extra + 60,
-                           distance_m=int(round(dist)), evidence_id=f"ev-route-{origin_id}-{dest_id}-{mode}")
+                           distance_m=int(round(dist)), evidence_id=f"ev-route-{origin_id}-{dest_id}-{mode}",
+                           source="straight-line estimate")
+
+    def estimate_many(self, pairs, mode: str, depart: datetime) -> dict[tuple[str, str], LegEstimate | None]:
+        """All legs of a plan at once: ONE routing request, cached. A leg the service cannot route is None;
+        if the service itself fails, every leg falls back to a straight-line estimate labelled as such."""
+        if mode not in SPEED_KMH:
+            raise ProviderError("unsupported", f"mode {mode!r} not supported; use one of {self.modes}")
+        pts = {x: self._points[x] for a, b in pairs for x in (a, b) if x in self._points}
+        known = [(a, b) for a, b in pairs if a in pts and b in pts]
+        routed: dict = {}
+        if self._routing is not None and known:
+            try:
+                routed = self._routing.matrix(mode, [(i, *c) for i, c in pts.items()], known)
+            except ProviderError:
+                routed = {}  # fall back below
+        out: dict[tuple[str, str], LegEstimate | None] = {}
+        for a, b in pairs:
+            if (a, b) not in known:
+                out[(a, b)] = None
+            elif (a, b) in routed:
+                r = routed[(a, b)]
+                if r is None:  # genuinely unreachable: do not guess
+                    out[(a, b)] = None
+                    continue
+                dist, dur = r
+                extra = 300 if mode == "car" else 0  # parking / access buffer
+                out[(a, b)] = LegEstimate(mode=mode, min_s=int(round(dur)) + extra,
+                                          max_s=int(round(dur * 1.25)) + extra + 60, distance_m=int(round(dist)),
+                                          evidence_id=f"ev-route-osm-{a}-{b}-{mode}", source="OpenStreetMap routing (FOSSGIS)")
+            else:
+                est = self.estimate(a, b, mode, depart)
+                out[(a, b)] = None if est is None else dataclasses.replace(
+                    est, evidence_id=(est.evidence_id or "").replace("ev-route-", "ev-route-est-", 1))
+        return out
 
     # --- weather (Open-Meteo) ----------------------------------------------------
 

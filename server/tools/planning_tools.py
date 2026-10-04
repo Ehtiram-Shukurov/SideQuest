@@ -144,17 +144,21 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
         """Fill the route matrix for `mode`. Returns (rows, error output or None)."""
         t = ctx.trip
         matrix = ctx.matrices.setdefault(mode, {})
-        rows = []
+        pairs = _needed_pairs(ctx, pids)
         try:
-            for x, y in _needed_pairs(ctx, pids):
-                est = ctx.routes.estimate(x, y, mode, t.window_start)
-                if est is None:
-                    continue
-                matrix[(x, y)] = est
-                rows.append({"from": x, "to": y, "min_minutes": round(est.min_s / 60, 1),
-                             "max_minutes": round(est.max_s / 60, 1), "distance_m": est.distance_m})
+            if hasattr(ctx.routes, "estimate_many"):  # one request for the whole plan
+                got = ctx.routes.estimate_many(pairs, mode, t.window_start)
+            else:
+                got = {(x, y): ctx.routes.estimate(x, y, mode, t.window_start) for x, y in pairs}
         except ProviderError as exc:
-            return rows, _provider_error(exc)
+            return [], _provider_error(exc)
+        rows = []
+        for (x, y), est in got.items():
+            if est is None:
+                continue
+            matrix[(x, y)] = est
+            rows.append({"from": x, "to": y, "min_minutes": round(est.min_s / 60, 1),
+                         "max_minutes": round(est.max_s / 60, 1), "distance_m": est.distance_m, "source": est.source})
         return rows, None
 
     def fetch_weather():
@@ -266,7 +270,7 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
         if err:
             return err
         data = _envelope(ctx, ctx.routes.name, ctx.routes.synthetic,
-                         ["Durations are estimates for this mode only; planning uses the max."],
+                         ["Durations are for this mode only; see each leg's `source`. Planning uses the max."],
                          mode=a.mode, legs=rows)
         return ToolOutput(data, f"Estimated {len(rows)} {a.mode} route(s)")
 

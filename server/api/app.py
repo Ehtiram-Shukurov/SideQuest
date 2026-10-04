@@ -56,6 +56,7 @@ from server.planning.export import (
 from server.planning.validators import validate_plan
 from server.providers.base import PlaceSummary
 from server.providers.live import LiveWorld
+from server.providers.routing import FossgisRouting, RouteCache
 from server.providers.synthetic import SyntheticWorld
 from server.tools.context import Proposal, ToolContext
 
@@ -185,6 +186,24 @@ def _weather_json(ctx: ToolContext) -> dict[str, Any] | None:
     return {"available": True, "max_pct": round(max(probs) * 100), "min_pct": round(min(probs) * 100)}
 
 
+def route_notes(plan: Plan, synthetic: bool) -> list[str]:
+    """Plan notes that say where this plan's route times actually came from (and give attribution)."""
+    if synthetic:
+        return ["DEMO DATA: venues, prices and forecasts are invented."]
+    ids = [e for leg in plan.legs for e in leg.evidence_ids]
+    osm, est = any("ev-route-osm" in e for e in ids), any("ev-route-est" in e for e in ids)
+    if osm and not est:
+        route = ("Route times come from OpenStreetMap routing (FOSSGIS service): typical speeds, no live traffic. "
+                 "Routing data \u00a9 OpenStreetMap contributors.")
+    elif osm:
+        route = ("Some route times come from OpenStreetMap routing; the others are straight-line estimates. "
+                 "Routing data \u00a9 OpenStreetMap contributors.")
+    else:
+        route = "Route times are straight-line estimates, not a routing engine."
+    return [route, "Hours and prices come from community map data and may be missing or out of date.",
+            "A saved plan is a suggestion, not a booking."]
+
+
 def proposal_json(prop: Proposal, ctx: ToolContext) -> dict[str, Any]:
     tz = ctx.trip.timezone
     plan = prop.plan
@@ -212,10 +231,7 @@ def proposal_json(prop: Proposal, ctx: ToolContext) -> dict[str, Any]:
     totals = None if tot is None else {
         "low": tot.low_minor / 100, "high": tot.high_minor / 100,
         "cap": None if tot.cap_minor is None else tot.cap_minor / 100, "has_unknown": tot.has_unknown}
-    notes = (["DEMO DATA: venues, prices and forecasts are invented."] if ctx.places.synthetic else
-             ["Route times are straight-line estimates, not a routing engine.",
-              "Hours and prices come from community map data and may be missing or out of date.",
-              "A saved plan is a suggestion, not a booking."])
+    notes = route_notes(plan, bool(ctx.places.synthetic))
     return {"id": prop.id, "state": plan.state, "overall": rep.overall, "explanation": prop.explanation,
             "blocks": blocks, "legs": legs, "issues": issues, "totals": totals, "confidence": rep.confidence,
             "verify": [{"block_id": v.block_id, "name": v.name, "field": v.field, "source": v.source, "url": v.url}
@@ -299,12 +315,14 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
     sessions: dict[str, TripSession] = {}
     busy = threading.Lock()  # one agent run at a time (solo and group share it)
     store = Store(db_path)
-    register_groups(app, store=store, provider_factory=provider_factory, now_fn=now_fn, busy=busy,
+    # Real routes from the free FOSSGIS service (1 request/s limit, cached). SIDEQUEST_ROUTING=off disables it.
+    routing = None if os.environ.get("SIDEQUEST_ROUTING", "on").lower() == "off" else FossgisRouting(cache=RouteCache(db_path))
+    register_groups(app, store=store, routing=routing, provider_factory=provider_factory, now_fn=now_fn, busy=busy,
                     limits=LIMITS, proposal_json=proposal_json)
 
     def make_world(req: PlanRequest, trip: Trip, now: datetime) -> Any:
         return SyntheticWorld(trip, now=now) if req.data == "demo" else LiveWorld(
-            lat=req.lat, lon=req.lon, tz=req.tz, origin_id="here", now=now)
+            lat=req.lat, lon=req.lon, tz=req.tz, origin_id="here", now=now, routing=routing)
 
     def rehydrate(trip_id: str) -> TripSession | None:
         """Rebuild a session from the store after a restart (or eviction). The accepted plan, its

@@ -23,4 +23,5 @@
 estimates for walking; pick the mode the traveller has.
 
 **Stop condition:** `save_proposal` succeeds. If `assemble_plan` says `feasible: false`, go to the
-repair skill; do not keep searching.
+repair skill; do not keep searching. `blockers` names the stop that does not fit (for example one that is
+not open long enough); swap or drop that stop rather than retrying the same set.

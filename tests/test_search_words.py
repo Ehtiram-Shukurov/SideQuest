@@ -33,3 +33,13 @@ def test_an_empty_search_tells_the_model_what_is_available_instead_of_leaving_it
     assert "Do not retry" in out["hint"] and "food" in out["hint"]
     ok = build_registry(ctx).call("search_places", {"query": "coffee"}).data  # and the loop's old query now works
     assert ok["status"] == "ok" and any(r["id"] == "corner-cafe" for r in ok["results"])
+
+
+def test_an_infeasible_assemble_names_the_stop_that_does_not_fit():
+    ctx = make_ctx(solo())
+    reg = build_registry(ctx)
+    reg.call("search_places", {"category": "culture"})
+    reg.call("get_place_details", {"place_ids": ["closed-gallery"]})
+    out = reg.call("assemble_plan", {"place_ids": ["closed-gallery"], "mode": "walk"}).data
+    assert out["feasible"] is False
+    assert out["blockers"] and "Closed Gallery" in out["blockers"][0]["reason"]

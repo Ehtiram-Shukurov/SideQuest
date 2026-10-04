@@ -36,7 +36,7 @@ runs on real Gemini.
 
 | Integration | Status |
 |---|---|
-| Gemini | verified live (tool-calling smoke test); full flows only partly verified live, see `docs/LIVE_RESULTS.md` |
+| Gemini | verified live: solo plan, clarifying question + structured answer, replan + accept, each as a single run on `gemini-3.5-flash-lite` (see `docs/LIVE_RESULTS.md`); group flow and the fallback models not run live |
 | Overpass (places) | verified live |
 | Open-Meteo (weather) | verified live |
 | FOSSGIS routing | verified live (matrix endpoint, all three profiles) |

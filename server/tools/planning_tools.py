@@ -99,6 +99,12 @@ def _plan_view(ctx: ToolContext, plan: Plan) -> dict[str, Any]:
 
 # --- tools -------------------------------------------------------------------------
 
+def _name_ids(text: str, names: dict[str, str]) -> str:
+    for pid, name in names.items():
+        text = text.replace(pid, f"{name} ({pid})")
+    return text
+
+
 def build_registry(ctx: ToolContext) -> ToolRegistry:
     reg = ToolRegistry()
 
@@ -306,7 +312,10 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
         res = assemble(t, [ctx.details[p] for p in a.place_ids], matrix, anchors=anchors, plan_id=pid)
         if res.plan is None:
             ctx.last_conflict = res.conflict
-            return ToolOutput({"feasible": False, "conflict": res.conflict},
+            names = {pid: ctx.details[pid].name for pid in a.place_ids}
+            blockers = [{"reason": _name_ids(why, names), "orderings": n}  # why orderings failed, so the model can swap the right stop
+                        for why, n in sorted(res.reasons.items(), key=lambda kv: -kv[1])[:3]]
+            return ToolOutput({"feasible": False, "conflict": res.conflict, "blockers": blockers},
                               f"No schedule fits: {res.conflict['code']}" if res.conflict else "No schedule fits")
         ctx.plans[pid] = res.plan
         validation = run_validation(pid)  # code validates the draft; the model never marks it valid

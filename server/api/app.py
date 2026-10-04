@@ -18,6 +18,7 @@ import dataclasses
 import json
 import os
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -27,7 +28,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -460,6 +461,31 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
         solo_auth(run.trip_id, authorization)
         return {"done": run.done, "events": run.events, "result": run.result, "error": run.error,
                 "trip_id": run.trip_id, "kind": run.kind}
+
+    @app.get("/api/runs/{run_id}/stream")
+    def stream_run(run_id: str, authorization: str | None = Header(default=None)) -> StreamingResponse:
+        """Live progress as server-sent events. Clients without streaming fall back to polling the run."""
+        run = runs.get(run_id)
+        if run is None:
+            raise HTTPException(404, "unknown run")
+        solo_auth(run.trip_id, authorization)
+
+        def events():
+            sent, ticks, deadline = 0, 0, time.monotonic() + 900
+            while time.monotonic() < deadline:
+                for e in run.events[sent:]:
+                    yield f"id: {e['seq']}\nevent: progress\ndata: {json.dumps(e)}\n\n"
+                    sent += 1
+                if run.done:
+                    yield f"event: done\ndata: {json.dumps({'error': run.error})}\n\n"
+                    return
+                ticks += 1
+                if ticks % 40 == 0:
+                    yield ": keepalive\n\n"
+                time.sleep(0.25)
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.post("/api/runs/{run_id}/answer")
     def answer(run_id: str, body: AnswerRequest, authorization: str | None = Header(default=None)):

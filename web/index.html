@@ -608,15 +608,43 @@ function endRun() { S.busy = false; hide('working'); refreshControls(); }
 
 function track(runId) {
   S.runId = runId;
+  streamRun(runId).then(ok => { if (!ok) pollRun(runId); });
+}
+// Live progress over server-sent events. fetch() is used (not EventSource) so the auth header works.
+async function streamRun(runId) {
+  try {
+    const r = await fetch('/api/runs/' + runId + '/stream', { headers: S.ownerToken ? { Authorization: 'Bearer ' + S.ownerToken } : {} });
+    if (!r.ok || !r.body) return false;
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = '', finished = false;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, i); buf = buf.slice(i + 2);
+        const ev = (block.match(/^event: (.*)$/m) || [])[1], data = (block.match(/^data: (.*)$/m) || [])[1];
+        if (ev === 'progress' && data) appendEvents([JSON.parse(data)]);
+        if (ev === 'done') finished = true;
+      }
+    }
+    if (!finished) return false;
+    pollRun(runId);  // the run is done: fetch its result once
+    return true;
+  } catch (e) { return false; }
+}
+function pollRun(runId) {
   api('/api/runs/' + runId).then(j => {
     appendEvents(j.events || []);
-    if (!j.done) { S.pollTimer = setTimeout(() => track(runId), 1500); return; }
+    if (!j.done) { S.pollTimer = setTimeout(() => pollRun(runId), 1500); return; }
     endRun();
     if (j.error) { runFailed('The run failed: ' + j.error); return; }
     if (!j.result) { runFailed('The run finished without a result. Try again.'); return; }
     showResult(j.result, {});
   }).catch(e => { endRun(); runFailed(e.message); });
 }
+
 function runFailed(text) {
   if (S.current || S.view) { show('workspace'); put('notice', notice('err', 'alert', text)); }
   else { showCompose(); formMsg(text, 'field-err'); $('go').disabled = !S.pos; }

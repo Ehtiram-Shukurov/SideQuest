@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -156,10 +157,12 @@ def overlook_script():
             tc("save_proposal", plan_id="plan-1", explanation="A short outdoor stop that suits the group.")]
 
 
-def wait_run(c, gid, token, runs_seen=0):
+def wait_run(c, gid, token, until=None):
+    """Wait for a finished run. Run ids come from the (fixed) test clock, so a replan cannot be told apart
+    from the first run by id; `until` says what the new result must look like."""
     for _ in range(300):
         v = c.get(f"/api/groups/{gid}", headers=H(token)).json()
-        if v["run"] and v["run"]["done"]:
+        if v["run"] and v["run"]["done"] and (until is None or until(v)):
             return v
         time.sleep(0.05)
     raise AssertionError("run did not finish")
@@ -186,7 +189,7 @@ def test_plan_for_everyone_asks_the_person_left_out_and_blocks_stale_acceptance(
     bob_plan = c.get(f"/api/groups/{gid}", headers=H(bob["member_token"])).json()["candidate"]
     rows = {p["name"]: p for p in bob_plan["people"]}
     assert rows["Bob"]["my_cost"]["cap"] == 37.5 and "my_cost" not in rows["Ann"]
-    assert rows["Ann"]["budget_status"] == "within budget" and "50" not in json.dumps(rows["Ann"])
+    assert rows["Ann"]["budget_status"] == "within budget" and not re.search(r"\b50(\.0)?\b", json.dumps(rows["Ann"]))  # random ids may contain 50; a standalone 50 is her budget
 
     # Cara is asked, and only Cara (and the organizer) can see the question
     cara_view = c.get(f"/api/groups/{gid}", headers=H(cara["member_token"])).json()
@@ -204,7 +207,7 @@ def test_plan_for_everyone_asks_the_person_left_out_and_blocks_stale_acceptance(
     alt = c.post(f"/api/groups/{gid}/questions/{q['id']}/answer", headers=H(cara["member_token"]),
                  json={"answer": "alt", "alt_start": iso(12, 30), "alt_end": iso(14, 30)})
     assert alt.status_code == 200 and alt.json()["replanning"] is True
-    v2 = wait_run(c, gid, ann)
+    v2 = wait_run(c, gid, ann, until=lambda x: x["candidate"] and x["candidate"]["excluded"] == [])
     assert {p["name"] for p in v2["candidate"]["people"]} == {"Ann", "Bob", "Cara"} and v2["candidate"]["excluded"] == []
     assert v2["candidate"]["stale"] is False
     assert c.post(f"/api/groups/{gid}/decision", headers=H(ann), json={"decision": "accept"}).status_code == 200

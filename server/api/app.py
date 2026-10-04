@@ -57,6 +57,7 @@ from server.planning.export import (
 from server.planning.validators import validate_plan
 from server.providers.base import PlaceSummary
 from server.providers.live import LiveWorld
+from server.providers.placecache import PlaceCache
 from server.providers.routing import FossgisRouting, RouteCache
 from server.providers.synthetic import SyntheticWorld
 from server.tools.context import Proposal, ToolContext
@@ -232,7 +233,7 @@ def proposal_json(prop: Proposal, ctx: ToolContext) -> dict[str, Any]:
     totals = None if tot is None else {
         "low": tot.low_minor / 100, "high": tot.high_minor / 100,
         "cap": None if tot.cap_minor is None else tot.cap_minor / 100, "has_unknown": tot.has_unknown}
-    notes = route_notes(plan, bool(ctx.places.synthetic))
+    notes = [*getattr(ctx.places, "data_notes", lambda: [])(), *route_notes(plan, bool(ctx.places.synthetic))]
     return {"id": prop.id, "state": plan.state, "overall": rep.overall, "explanation": prop.explanation,
             "blocks": blocks, "legs": legs, "issues": issues, "totals": totals, "confidence": rep.confidence,
             "verify": [{"block_id": v.block_id, "name": v.name, "field": v.field, "source": v.source, "url": v.url}
@@ -319,13 +320,14 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
     busy = threading.Lock()  # one agent run at a time (solo and group share it)
     store = Store(db_path)
     # Real routes from the free FOSSGIS service (1 request/s limit, cached). SIDEQUEST_ROUTING=off disables it.
+    place_cache = PlaceCache(db_path)
     routing = None if os.environ.get("SIDEQUEST_ROUTING", "on").lower() == "off" else FossgisRouting(cache=RouteCache(db_path))
     register_groups(app, store=store, routing=routing, provider_factory=provider_factory, now_fn=now_fn, busy=busy,
-                    limits=LIMITS, proposal_json=proposal_json)
+                    limits=LIMITS, proposal_json=proposal_json, place_cache=place_cache)
 
     def make_world(req: PlanRequest, trip: Trip, now: datetime) -> Any:
         return SyntheticWorld(trip, now=now) if req.data == "demo" else LiveWorld(
-            lat=req.lat, lon=req.lon, tz=req.tz, origin_id="here", now=now, routing=routing)
+            lat=req.lat, lon=req.lon, tz=req.tz, origin_id="here", now=now, routing=routing, cache=place_cache)
 
     def rehydrate(trip_id: str) -> TripSession | None:
         """Rebuild a session from the store after a restart (or eviction). The accepted plan, its

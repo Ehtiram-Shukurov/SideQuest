@@ -6,16 +6,27 @@
 <title>SideQuest — turn free time into a plan</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='13' fill='%23c2410c'/%3E%3Ccircle cx='24' cy='24' r='14' fill='none' stroke='%23fff' stroke-opacity='.6' stroke-width='2'/%3E%3Cpath d='M24 12.5l4.6 11.5H19.4z' fill='%23fff'/%3E%3Cpath d='M24 35.5L19.4 24h9.2z' fill='%23fff' fill-opacity='.5'/%3E%3Ccircle cx='37' cy='37' r='8' fill='%230e7490' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#faf4e8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1620" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body data-tab="plan">
+<div class="bg" id="bg" aria-hidden="true"><div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div><svg id="topo" class="topo" preserveAspectRatio="xMidYMid slice"></svg></div>
 <a class="skip" href="#main">Skip to content</a>
 <div id="replayBanner" role="alert"><div class="inner">REPLAY — recorded run, not a live agent run</div></div>
 
-<header class="top">
-  <div class="brand"><span class="mark" id="markIc"></span><span>Side<span class="q">Quest</span></span></div>
+<header class="top" id="top">
+  <a class="brand" href="/" aria-label="SideQuest home"><span class="mark" id="markIc"><svg class="logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a4d"/><stop offset="1" stop-color="#b93a08"/></linearGradient></defs>
+  <rect width="48" height="48" rx="13" fill="url(#lg1)"/>
+  <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+  <g class="ticks" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M24 7v3M24 38v3M7 24h3M38 24h3"/></g>
+  <g class="needle"><path d="M24 12.5l4.6 11.5H19.4z" fill="#fff"/><path d="M24 35.5L19.4 24h9.2z" fill="#fff" fill-opacity=".45"/><circle cx="24" cy="24" r="2.2" fill="#b93a08"/></g>
+  <circle cx="37" cy="37" r="8" fill="#0e7490" stroke="#fff" stroke-width="2"/><path d="M33.4 37.2l2.6 2.6 4.6-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span><span class="word"><span class="wm">Side<span class="q">Quest</span></span><small class="tag">AI proposes. Code checks.</small></span></a>
   <div class="spacer"></div>
-  <span class="chip ok" id="modeChip">Live</span>
+  <span class="chip ok live" id="modeChip"><i class="pulse"></i>Live</span>
   <button class="icon ghost hide" id="newBtn" aria-label="Start a new plan" title="New plan"></button>
   <button class="icon ghost" id="themeBtn" aria-label="Switch colour theme" title="Switch theme"></button>
 </header>
@@ -24,8 +35,26 @@
   <!-- ============ compose ============ -->
   <section id="compose" class="compose">
     <div class="hero">
-      <h1>Turn free time into a <span class="q">checked</span> plan.</h1>
-      <p>Tell SideQuest what you feel like doing. It finds real places near you, checks hours, routes and your budget, and tells you what it could not verify.</p>
+      <p class="eyebrow"><i class="pulse"></i>AI proposes · code checks · you decide</p>
+      <h1>Turn free time into a <span class="rotwrap"><span class="sr-only">checked</span><span class="rot" id="rot" aria-hidden="true">checked</span></span> plan.</h1>
+      <p class="lead">Describe your outing. SideQuest finds real places nearby, times the routes, weighs your budget and the weather, and tells you plainly what it could not verify.</p>
+
+      <figure class="routeart" aria-hidden="true">
+        <svg viewBox="0 0 420 190" focusable="false">
+          <path class="rt-shadow" d="M34 150 C96 150 92 62 152 70 S 232 150 272 102 S 342 38 388 58"/>
+          <path class="rt-draw" id="rtPath" pathLength="1" d="M34 150 C96 150 92 62 152 70 S 232 150 272 102 S 342 38 388 58"/>
+          <g class="rt-node n1"><circle cx="34" cy="150" r="15"/><path d="M27 146h12v5a6 6 0 0 1-12 0z M39 147h2a2.5 2.5 0 0 1 0 5h-2"/></g>
+          <g class="rt-node n2"><circle cx="152" cy="70" r="15"/><path d="M152 79V67m0 0l-5 5m5-5l5 5m-5-5l-4-4m4 4l4-4"/></g>
+          <g class="rt-node n3"><circle cx="272" cy="102" r="15"/><path d="M266 95v10m0-10c2 2 2 5 0 7m7-9v13m4-13v5a3 3 0 0 1-4 0"/></g>
+          <g class="rt-node n4"><circle cx="388" cy="58" r="15"/><path d="M380 66h16m-14 0v-9m4 9v-9m4 9v-9m4 9v-9m-14-2l6-4 6 4z"/></g>
+          <circle class="rt-dot" r="5"><animateMotion dur="9s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1;1" keyTimes="0;.58;1"><mpath href="#rtPath"/></animateMotion></circle>
+        </svg>
+        <figcaption>Illustration of how a plan fits together. Not a real plan.</figcaption>
+      </figure>
+
+      <ol class="flow" aria-label="How SideQuest works">
+        <li><b>1</b><span>Describe</span></li><li><b>2</b><span>AI proposes</span></li><li><b>3</b><span>Code checks</span></li><li><b>4</b><span>You decide</span></li>
+      </ol>
       <ul class="points" id="points"></ul>
     </div>
 
@@ -45,6 +74,12 @@
       <button type="button" id="locBtn" class="secondary" style="margin-top:10px;width:100%"></button>
 
       <label for="req">What do you feel like doing?</label>
+      <div class="examples" id="examples" role="group" aria-label="Example requests">
+        <button type="button" class="eg" data-text="Coffee, then a riverside or park walk, then lunch under $20. About 45 minutes each, walks under 15 minutes, back to start.">Coffee, walk, lunch</button>
+        <button type="button" class="eg" data-text="A quiet museum or gallery, then a cheap bite nearby. Keep walking short and finish in about 3 hours.">Museum afternoon</button>
+        <button type="button" class="eg" data-text="A scenic viewpoint, then a park, then dessert. Avoid rain if the forecast looks bad.">Views and dessert</button>
+        <button type="button" class="eg" data-text="A short bike loop with one coffee stop and one green space. Back to start within 2 hours.">Quick bike loop</button>
+      </div>
       <textarea id="req" maxlength="500" aria-describedby="reqHelp reqErr">Coffee, then a riverside or park walk, then lunch under $20, then a museum or gallery. About 45 minutes each, walks under 15 minutes, back to start.</textarea>
       <p class="help" id="reqHelp"><span id="reqCount">0</span>/500 characters</p>
       <p class="field-err hide" id="reqErr" role="alert"></p>
@@ -65,7 +100,7 @@
           <select id="rain"><option value="">Don't mind rain</option><option value="60">Avoid likely rain (over 60%)</option>
             <option value="40">Avoid possible rain (over 40%)</option><option value="20">Avoid any real chance (over 20%)</option></select></div>
         <div><label for="data">Places data</label>
-          <select id="data"><option value="live">Live: real places (OpenStreetMap)</option><option value="demo">Demo: invented venues</option></select></div>
+          <select id="data"><option value="live">Live: real places</option><option value="demo">Demo: invented venues</option></select></div>
       </div>
       <button type="submit" id="go" disabled>Plan my outing</button>
       <p id="msg" role="status" aria-live="polite"></p>
@@ -139,8 +174,14 @@
 
   <!-- ============ working ============ -->
   <section id="working" class="card hide" aria-live="polite">
-    <div class="feedhead"><div class="spinner" id="spinner"></div><h2 style="margin:0" id="workTitle">The agent is working</h2></div>
-    <p class="sub">Real tool calls as they happen. Nothing here is scripted.</p>
+    <div class="feedhead"><div class="radar" id="spinner" aria-hidden="true"><i></i><i></i><i></i><svg class="logo radar-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a4d"/><stop offset="1" stop-color="#b93a08"/></linearGradient></defs>
+  <rect width="48" height="48" rx="13" fill="url(#lg2)"/>
+  <circle cx="24" cy="24" r="14" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+  <g class="ticks" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M24 7v3M24 38v3M7 24h3M38 24h3"/></g>
+  <g class="needle"><path d="M24 12.5l4.6 11.5H19.4z" fill="#fff"/><path d="M24 35.5L19.4 24h9.2z" fill="#fff" fill-opacity=".45"/><circle cx="24" cy="24" r="2.2" fill="#b93a08"/></g>
+  <circle cx="37" cy="37" r="8" fill="#0e7490" stroke="#fff" stroke-width="2"/><path d="M33.4 37.2l2.6 2.6 4.6-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></div><div><h2 style="margin:0" id="workTitle">The agent is working</h2><p class="sub" style="margin:2px 0 0"><span id="workTimer" class="tabnum">0 s</span><span id="workNote"> · real tool calls as they happen, nothing here is scripted</span></p></div></div>
     <ol class="feed" id="events"></ol>
     <div class="skeleton" id="skeleton"><i></i><i></i></div>
   </section>
@@ -156,6 +197,7 @@
         <article class="card" id="planCard">
           <h1 class="big" id="pTitle">Your plan</h1>
           <div class="badges" id="pBadges"></div>
+          <div id="pGauge"></div>
           <p class="expl" id="pExpl"></p>
           <div id="spend"></div>
           <p class="meta" id="pMeta"></p>
@@ -213,10 +255,11 @@
   <button role="tab" data-tab="map" aria-selected="false" id="tabMap"></button>
   <button role="tab" data-tab="assistant" aria-selected="false" id="tabAssist"></button>
 </nav>
-<footer>SideQuest hackathon MVP · plans are researched suggestions, not bookings · route times are estimates: each plan's notes say where they came from</footer>
+<footer><span class="fmark">SideQuest</span> hackathon MVP · plans are researched suggestions, not bookings · route times are estimates and each plan's notes say where they came from · map data © OpenStreetMap contributors</footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="/static/app.js"></script>
+<script src="/static/fx.js"></script>
 </body>
 </html>

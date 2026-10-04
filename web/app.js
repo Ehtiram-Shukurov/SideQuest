@@ -34,8 +34,22 @@ const ICONS = {
   wallet: '<path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   rain: '<path d="M16 13v8"/><path d="M8 13v8"/><path d="M12 15v8"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
+  coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M6 1v3"/><path d="M10 1v3"/><path d="M14 1v3"/>',
+  utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/>',
+  tree: '<path d="M12 22v-6"/><path d="M12 16c-4 0-7-3-7-7 0-3 2-5 4-5.5C9.5 1.5 11 1 12 1s2.5.5 3 2.5c2 .5 4 2.5 4 5.5 0 4-3 7-7 7z"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',
+  landmark: '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2L2 8h20z"/>',
   route: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>'
 };
+const CAT_TOKENS = { food: 'food', cafe: 'food', restaurant: 'food', ice_cream: 'food', fast_food: 'food',
+  outdoor: 'outdoor', park: 'outdoor', garden: 'outdoor', hiking: 'outdoor', scenic: 'scenic', viewpoint: 'scenic',
+  culture: 'culture', museum: 'culture', gallery: 'culture', attraction: 'culture' };
+function catOf(b) { for (const t of (b && b.categories) || []) if (CAT_TOKENS[t]) return CAT_TOKENS[t]; return 'other'; }
+function catIcon(b) {
+  const c = catOf(b), tokens = (b && b.categories) || [];
+  if (c === 'food') return tokens.includes('cafe') ? 'coffee' : 'utensils';
+  return { outdoor: 'tree', scenic: 'eye', culture: 'landmark' }[c] || 'pin';
+}
 function ic(name) {
   const doc = new DOMParser().parseFromString(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || '') + '</svg>', 'image/svg+xml');
@@ -141,6 +155,7 @@ async function startPlan() {
 }
 
 function beginRun(title) {
+  if (window.fx) window.fx.working(true);
   S.busy = true; S.events = []; S.lastSeq = 0; clear('events');
   $('workTitle').textContent = title; show('working'); show('skeleton'); show('spinner');
   hide('compose'); if (S.view || S.current) show('workspace'); else hide('workspace');
@@ -200,7 +215,8 @@ function appendEvents(events) {
     if (e.seq <= S.lastSeq) continue;
     S.lastSeq = e.seq; S.events.push(e);
     if (e.kind === 'tool_call') continue;  // the result line says what happened
-    $('events').append(h('li', { class: e.kind || '' }, h('span', null, e.summary || '')));
+    const fi = { tool_result: 'check', final: 'shield', error: 'alert', limit: 'alert' }[e.kind];
+    $('events').append(h('li', { class: e.kind || '' }, fi ? ic(fi) : null, h('span', null, e.summary || '')));
   }
   const l = $('events'); l.scrollTop = l.scrollHeight;
 }
@@ -231,7 +247,8 @@ function showResult(res, opts) {
 
 function renderTripBar(res, shown) {
   const c = res.constraints || shown.constraints, bar = clear('tripbar');
-  const chip = (cls, icon, text) => h('span', { class: 'chip ' + cls }, ic(icon), text);
+  let ci = 0;
+  const chip = (cls, icon, text) => h('span', { class: 'chip ' + cls, style: '--i:' + (ci++) }, ic(icon), text);
   if (c) {
     const hrs = c.minutes >= 60 ? (c.minutes / 60).toFixed(c.minutes % 60 ? 1 : 0) + ' h' : c.minutes + ' min';
     bar.append(chip('', 'clock', c.window + ' · ' + hrs), chip('', 'route', c.mode),
@@ -335,7 +352,7 @@ function verifyBlock(items) {
 function renderPlan(res, shown) {
   const p = shown.proposal;
   const cand = !!res.awaiting_decision;
-  clear('pBadges'); clear('timeline'); clear('issues'); clear('notes'); clear('spend');
+  clear('pBadges'); clear('pGauge'); clear('timeline'); clear('issues'); clear('notes'); clear('spend');
   if (!p) {
     $('pTitle').textContent = 'No plan yet'; $('pExpl').textContent = res.clarification ? 'Answer the question above and the planner will continue.' : 'Nothing to show.';
     $('pMeta').textContent = ''; return;
@@ -343,6 +360,13 @@ function renderPlan(res, shown) {
   $('pTitle').textContent = S.replay ? 'Your plan (replay)' : cand ? 'Proposed plan' : 'Your plan';
   put('pBadges', h('span', { class: 'badge b-' + p.overall }, ic(p.overall === 'checked' ? 'check' : p.overall === 'failed' ? 'alert' : 'help'), confLabel(p.overall, p.confidence)),
     h('span', { class: 'badge b-info' }, p.checks_passed + ' checks passed'));
+  const unk = (p.issues || []).filter(i => i.status === 'unknown').length, bad = (p.issues || []).filter(i => i.status === 'fail').length;
+  const segs = [];
+  for (let k = 0; k < p.checks_passed; k++) segs.push(h('i', { style: '--i:' + segs.length }));
+  for (let k = 0; k < unk; k++) segs.push(h('i', { class: 'unknown', style: '--i:' + segs.length }));
+  for (let k = 0; k < bad; k++) segs.push(h('i', { class: 'fail', style: '--i:' + segs.length }));
+  if (segs.length) put('pGauge', h('div', { class: 'gauge', role: 'img', 'aria-label': p.checks_passed + ' checks passed, ' + unk + ' unknown, ' + bad + ' failed' }, segs),
+    h('p', { class: 'gauge-cap', 'aria-hidden': 'true' }, h('span', null, p.checks_passed + ' passed'), unk ? h('span', { class: 'u' }, unk + ' unknown') : null, bad ? h('span', { class: 'f' }, bad + ' failed') : null));
   $('pExpl').textContent = p.explanation || '';
   const bits = [];
   if (typeof shown.tool_calls === 'number') bits.push(shown.tool_calls + ' tool calls');
@@ -367,7 +391,7 @@ function renderPlan(res, shown) {
   const tl = $('timeline');
   p.blocks.forEach((b, i) => {
     const lg = legNode(into[i], i === 0 ? 'from your start' : '');
-    if (lg) tl.append(lg);
+    if (lg) { lg.style.setProperty('--i', 2 * i); tl.append(lg); }
     const facts = (b.facts || []).map(factChip).filter(Boolean);
     const chips = h('div', { class: 'chips' }, h('span', { class: 'mini' }, ic('wallet'), b.cost || ''), facts,
       b.step_free === true ? h('span', { class: 'mini ok' }, 'Step-free') : b.step_free === false ? h('span', { class: 'mini warn' }, 'Not step-free') : null,
@@ -381,14 +405,14 @@ function renderPlan(res, shown) {
       h('button', { class: 'small danger', type: 'button', disabled: !canEdit, 'aria-label': 'Remove ' + b.name, onclick: () => replan([{ type: 'remove_stop', block_id: b.id }]) }, ic('trash'), 'Remove'),
       b.lat != null ? h('button', { class: 'small ghost', type: 'button', 'aria-label': 'Show ' + b.name + ' on the map', onclick: () => focusStop(i, true) }, ic('pin'), 'Map') : null);
     const dur = durationMin(b.start, b.end);
-    const card = h('li', { class: 'stop' + (b.locked ? ' locked' : ''), id: 'stop' + i, 'data-i': i },
+    const card = h('li', { class: 'stop' + (b.locked ? ' locked' : ''), id: 'stop' + i, 'data-i': i, 'data-cat': catOf(b), style: '--i:' + (2 * i + 1) },
       h('div', { class: 'when' }, b.start, h('small', null, 'to ' + b.end + (dur ? ' · ' + dur + ' min' : ''))),
-      h('div', null, h('h3', { 'aria-level': '2' }, h('span', { class: 'num' }, String(i + 1)), b.name), chips, S.replay ? null : acts));
+      h('div', null, h('h3', { 'aria-level': '2' }, h('span', { class: 'tile' }, ic(catIcon(b)), h('span', { class: 'num' }, String(i + 1))), b.name), chips, S.replay ? null : acts));
     card.addEventListener('click', ev => { if (!ev.target.closest('button')) focusStop(i, false); });
     tl.append(card);
   });
   const fin = legNode(last, 'back to your start');
-  if (fin) tl.append(fin);
+  if (fin) { fin.style.setProperty('--i', 2 * p.blocks.length); tl.append(fin); }
 
   for (const i of p.issues || []) $('issues').append(h('div', { class: 'issue ' + i.status }, ic(i.status === 'fail' ? 'alert' : 'help'), h('span', null, i.message)));
   const vb = verifyBlock(p.verify); if (vb) $('issues').append(vb);
@@ -435,7 +459,9 @@ $('budBtn').onclick = () => {
 };
 
 /* ---------- map (never allowed to break the plan) ---------- */
-function pinIcon(label, cls) { return L.divIcon({ className: '', html: '<div class="pin ' + (cls || '') + '">' + label + '</div>', iconSize: [30, 30], iconAnchor: [15, 15] }); }
+function pinIcon(label, cls, i) {
+  return L.divIcon({ className: '', html: '<div class="pin ' + (cls || '') + '" style="--i:' + (+i || 0) + '"><b>' + label + '</b></div>', iconSize: [32, 32], iconAnchor: [cls === 'home' ? 16 : 16, cls === 'home' ? 16 : 30] });
+}
 function renderMap(shown) {
   const origin = shown.origin, blocks = (shown.proposal && shown.proposal.blocks) || [];
   try {
@@ -445,14 +471,14 @@ function renderMap(shown) {
     layer = L.layerGroup().addTo(map); markers = []; meMarker = null;
     setTimeout(() => { try { map.getContainer().querySelectorAll('svg').forEach(s => s.setAttribute('aria-hidden', 'true')); } catch (e) {} }, 100);
     const pts = [];
-    if (origin && origin.lat != null) { pts.push([origin.lat, origin.lon]); L.marker([origin.lat, origin.lon], { icon: pinIcon('S', 'home'), keyboard: false }).bindTooltip('Start / end').addTo(layer); }
+    if (origin && origin.lat != null) { pts.push([origin.lat, origin.lon]); L.marker([origin.lat, origin.lon], { icon: pinIcon('S', 'home', 0), keyboard: false }).bindTooltip('Start / end').addTo(layer); }
     blocks.forEach((b, i) => {
       if (b.lat == null || b.lon == null) { markers[i] = null; return; }
       pts.push([b.lat, b.lon]);
-      const m = L.marker([b.lat, b.lon], { icon: pinIcon(String(i + 1)), keyboard: false }).bindTooltip(b.name).addTo(layer);
+      const m = L.marker([b.lat, b.lon], { icon: pinIcon(String(i + 1), catOf(b), i + 1), keyboard: false }).bindTooltip(b.name).addTo(layer);
       m.on('click', () => focusStop(i, false)); markers[i] = m;
     });
-    for (let i = 1; i < pts.length; i++) L.polyline([pts[i - 1], pts[i]], { color: '#2459e6', weight: 2, opacity: .5, dashArray: '6 6' }).addTo(layer);
+    for (let i = 1; i < pts.length; i++) L.polyline([pts[i - 1], pts[i]], { color: '#0e7490', weight: 3, opacity: .85, className: 'route-line' }).addTo(layer);
     if (pts.length) map.fitBounds(pts, { padding: [34, 34], maxZoom: 16 });
     setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 80);
     hide('mapNote');
@@ -531,7 +557,7 @@ async function loadReplayFixture() {
 function initReplay() {
   document.body.classList.add('replay'); S.replay = true; document.title = 'SideQuest — replay';
   $('modeChip').textContent = 'Replay'; $('modeChip').className = 'chip warn';
-  hide('compose'); show('working'); $('workTitle').textContent = 'Replaying a recorded run';
+  hide('compose'); show('working'); $('workTitle').textContent = 'Replaying a recorded run'; hide('workTimer'); $('workNote').textContent = 'Recorded tool calls, played back. No model is running.';
   loadReplayFixture().then(fx => {
     const evs = fx.events || []; let i = 0;
     const step = () => {
@@ -926,7 +952,7 @@ async function renderGroupSave(st) {
 
 /* ---------- boot ---------- */
 function boot() {
-  put('markIc', ic('compass')); put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Share my location');
+  put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Share my location');
   put('assistIc', ic('chat')); put('chevIc', ic('chev'));
   put('tabPlan', ic('list'), 'Plan'); put('tabMap', ic('map'), 'Map'); put('tabAssist', ic('chat'), 'Assistant');
   const pts = [['shield', 'Every plan is checked in code, not just written by a model.'], ['pin', 'Uses your real location and real nearby places.'],

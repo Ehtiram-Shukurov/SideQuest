@@ -21,8 +21,8 @@ MAX_ROUTE_POINTS = 7
 # --- argument models ---------------------------------------------------------------
 
 class SearchArgs(BaseModel):
-    category: str = Field(default="", description="Category such as food, outdoor, culture. Empty for any.")
-    query: str = Field(default="", description="Free-text filter on name or category.")
+    category: str = Field(default="", description="One of: food (cafes, restaurants), outdoor (parks, walks), scenic (viewpoints), culture (museums, galleries). Empty for any.")
+    query: str = Field(default="", description="Optional venue-name filter, e.g. 'Wise Owl'. Everyday words like 'coffee' or 'park' are mapped to a category. Prefer `category`.")
     limit: int = Field(default=6, ge=1, le=10)
     include_details: bool = Field(default=True, description="Include hours, price and access facts for the first 6 results.")
 
@@ -229,6 +229,11 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
                   if facts else ["Search results carry no hours, prices or accessibility: call get_place_details."])
         data = _envelope(ctx, ctx.places.name, ctx.places.synthetic, limits,
                          status="ok" if found else "no_results", results=results)
+        if not found:  # tell the model what exists so it can recover in ONE step instead of guessing queries
+            counts = getattr(ctx.places, "category_counts", lambda: {})()
+            data["available_categories"] = counts
+            data["hint"] = ("Nothing matched. Do not retry with another free-text query. Use category="
+                            + "|".join(counts or ('food', 'outdoor', 'scenic', 'culture')) + " (or leave both empty).")
         return ToolOutput(data, f"Searched places (category={a.category or 'any'}): {len(found)} result(s)"
                           + (" with details" if facts else ""))
 

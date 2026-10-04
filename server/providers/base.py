@@ -14,6 +14,28 @@ from server.models.weather import ForecastPeriod
 from server.planning.assemble import LegEstimate
 
 
+CATEGORY_NAMES = ("food", "outdoor", "scenic", "culture")
+
+# Everyday words a model (or a person) uses, mapped to a provider category. Used only as a fallback
+# when a literal name/tag match finds nothing, so a real venue name still wins.
+QUERY_WORDS: dict[str, str] = {
+    **dict.fromkeys(("coffee", "cafe", "café", "tea", "bakery", "breakfast", "brunch", "lunch", "dinner", "restaurant",
+                     "eat", "food", "snack", "dessert", "ice cream", "drink", "bar", "pizza", "burger"), "food"),
+    **dict.fromkeys(("park", "walk", "hike", "hiking", "garden", "trail", "outdoor", "outdoors", "outside", "nature",
+                     "river", "lake", "green"), "outdoor"),
+    **dict.fromkeys(("view", "views", "viewpoint", "scenic", "overlook", "lookout", "sunset"), "scenic"),
+    **dict.fromkeys(("museum", "gallery", "art", "culture", "history", "attraction", "sightseeing", "exhibit"), "culture"),
+}
+
+
+def category_for_words(text: str) -> str | None:
+    """The category an everyday phrase refers to ('coffee shop' -> food), or None."""
+    t = text.strip().lower()
+    if t in QUERY_WORDS:
+        return QUERY_WORDS[t]
+    return next((c for w, c in QUERY_WORDS.items() if len(w) > 2 and w in t), None)
+
+
 class ProviderError(RuntimeError):
     def __init__(self, kind: str, message: str):
         super().__init__(message)

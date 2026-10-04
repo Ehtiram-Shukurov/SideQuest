@@ -6,8 +6,11 @@
 `estimate_routes`, `get_place_details`, `validate_plan` only if you need them).
 
 **Procedure (aim for three tool calls)**
-1. `search_places` once per category you need (food, outdoor, culture, scenic). Hours, prices and
-   access facts come back inline. Pick stops from those results.
+1. `search_places` once per category you need, using the `category` argument: `food` (cafes,
+   restaurants), `outdoor` (parks, walks), `scenic` (viewpoints), `culture` (museums, galleries). Hours,
+   prices and access facts come back inline. Pick stops from those results. If a search returns
+   nothing, read `available_categories` and use one of those; never retry with a different free-text
+   query.
 2. `assemble_plan` with the chosen ids and one travel mode. Code estimates any missing routes,
    fetches the forecast if a rain limit applies, orders the stops, and validates the draft. Read the
    `validation` field in the result.

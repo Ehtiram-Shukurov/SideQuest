@@ -12,7 +12,7 @@ from server.models import Cost, Evidence, Place, TimeWindow, Trip
 from server.models.weather import ForecastPeriod
 from server.planning.assemble import LegEstimate
 
-from .base import PlaceDetails, PlaceSummary, ProviderError
+from .base import CATEGORY_NAMES, PlaceDetails, PlaceSummary, ProviderError, category_for_words
 
 SPEED_KMH = {"walk": 4.8, "bike": 14.0, "car": 28.0}
 
@@ -82,8 +82,7 @@ class SyntheticWorld:
 
     # --- places ------------------------------------------------------------------
 
-    def search(self, *, category: str, query: str, limit: int) -> list[PlaceSummary]:
-        cat, q = category.strip().lower(), query.strip().lower()
+    def _filter(self, cat: str, q: str) -> list[PlaceSummary]:
         out = []
         for d in DEFS:
             if cat and cat not in d.categories:
@@ -92,7 +91,19 @@ class SyntheticWorld:
                 continue
             lat, lon = self._points[d.id]
             out.append(PlaceSummary(d.id, d.name, d.categories, lat, lon, self.name, True))
-        return out[:limit]
+        return out
+
+    def search(self, *, category: str, query: str, limit: int) -> list[PlaceSummary]:
+        cat, q = category.strip().lower(), query.strip().lower()
+        if cat and not any(cat in d.categories for d in DEFS):
+            q, cat = q or cat, category_for_words(cat) or ""
+        found = self._filter(cat, q)
+        if not found and q and (mapped := category_for_words(q)):
+            found = self._filter(cat or mapped, "")
+        return found[:limit]
+
+    def category_counts(self) -> dict[str, int]:
+        return {c: sum(1 for d in DEFS if c in d.categories) for c in CATEGORY_NAMES if any(c in d.categories for d in DEFS)}
 
     def _local(self, day: date, hour: int) -> datetime:
         d = day + timedelta(days=1) if hour == 24 else day

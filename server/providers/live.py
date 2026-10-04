@@ -22,7 +22,7 @@ from server.models import Cost, Evidence, Place, TimeWindow
 from server.models.weather import ForecastPeriod
 from server.planning.assemble import LegEstimate
 
-from .base import PlaceDetails, PlaceSummary, ProviderError
+from .base import PlaceDetails, PlaceSummary, ProviderError, category_for_words
 from .synthetic import SPEED_KMH, _haversine_m
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -162,8 +162,7 @@ class LiveWorld:
                 return cat, tags[key]
         return None
 
-    def search(self, *, category: str, query: str, limit: int) -> list[PlaceSummary]:
-        cat, q = category.strip().lower(), query.strip().lower()
+    def _filter(self, cat: str, q: str) -> list[tuple[float, PlaceSummary]]:
         out = []
         for pid, e in self._load().items():
             kind = self._kind(e["tags"])
@@ -175,7 +174,27 @@ class LiveWorld:
             d = _haversine_m((self._lat, self._lon), (e["lat"], e["lon"]))
             out.append((d, PlaceSummary(pid, name, (kind[0], kind[1]), e["lat"], e["lon"], "OpenStreetMap")))
         out.sort(key=lambda t: t[0])
-        return [p for _, p in out[:limit]]
+        return out
+
+    def search(self, *, category: str, query: str, limit: int) -> list[PlaceSummary]:
+        cat, q = category.strip().lower(), query.strip().lower()
+        if cat and cat not in CATEGORIES:  # e.g. category="coffee": treat it as everyday words
+            q, cat = q or cat, category_for_words(cat) or ""
+        found = self._filter(cat, q)
+        if not found and q:  # a literal name/tag match found nothing: try what the words mean ("coffee" -> food)
+            mapped = category_for_words(q)
+            if mapped:
+                found = self._filter(cat or mapped, "")
+        return [p for _, p in found[:limit]]
+
+    def category_counts(self) -> dict[str, int]:
+        """How many nearby places each category has, so an empty search can say what IS available."""
+        counts: dict[str, int] = {}
+        for e in self._load().values():
+            kind = self._kind(e["tags"])
+            if kind:
+                counts[kind[0]] = counts.get(kind[0], 0) + 1
+        return counts
 
     def details(self, place_id: str, visit_day: date) -> PlaceDetails | None:
         e = self._load().get(place_id)

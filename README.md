@@ -39,3 +39,7 @@ uv run uvicorn server.api.app:app --port 8000   # open http://localhost:8000
 - `server/api/` FastAPI app and security middleware; `server/groups/` group trips and the SQLite store
 - `server/eval/` scenario evaluation; `web/` the single-page UI (`index.html`, `app.js`, `app.css`)
 - `tests/` all tests (scripted model, synthetic data, mocked HTTP); `docs/` plan, status, security, live results
+
+## Deploy (free)
+
+`render.yaml` is a Render Blueprint on the free plan. In Render choose New > Blueprint, pick this repo, and paste `GEMINI_API_KEY` when asked (never commit it). Notes: the free plan sleeps after idle time (first request is slow) and its disk is temporary, so saved plans, share links and owner tokens are lost on every restart. Treat the deployed copy as a demo. Gemini's free tier may use prompts to improve Google's products, so enter only non-sensitive text.

@@ -1,0 +1,16 @@
+# Render Blueprint (free plan). The Gemini key is NOT stored here: Render asks for it in its dashboard.
+services:
+  - type: web
+    name: sidequest
+    runtime: python
+    plan: free
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run uvicorn server.api.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SIDEQUEST_MODEL_PROVIDER
+        value: gemini
+      - key: SIDEQUEST_DB
+        value: /tmp/sidequest.db

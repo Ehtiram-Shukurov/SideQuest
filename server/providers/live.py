@@ -119,7 +119,7 @@ class LiveWorld:
         self._lat, self._lon, self._tz, self._origin_id = lat, lon, ZoneInfo(tz), origin_id
         self._now = now.astimezone(UTC)
         self._radius = radius_m
-        self._client = client or make_client(timeout=25.0, headers={"User-Agent": USER_AGENT})
+        self._client = client or make_client(timeout=httpx.Timeout(25.0, connect=5.0), headers={"User-Agent": USER_AGENT})  # a dead mirror costs 5 s, not 25
         self._elements: dict[str, dict] | None = None
         self._points: dict[str, tuple[float, float]] = {origin_id: (lat, lon)}
         self._cache, self._wall, self._stale_at = cache, wall, None

@@ -41,6 +41,7 @@ def test_plan_flow_returns_checked_proposal_with_coordinates():
     c = TestClient(create_app(lambda: ScriptedProvider(script()), lambda: NOW))
     r = c.post("/api/plans", json=BODY)
     assert r.status_code == 200
+    c.headers["Authorization"] = "Bearer " + r.json()["owner_token"]  # solo trips need their owner token
     j = wait(c, r.json()["run_id"])
     assert j["error"] is None and j["result"]["status"] == "proposal_saved"
     p = j["result"]["proposal"]

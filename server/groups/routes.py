@@ -9,7 +9,8 @@ built from older inputs is stale and cannot be accepted.
 
 Privacy: budgets, access needs and dietary needs are visible only to their owner. Others see only
 a within / over / unknown status. Roles come from the token on the server, never from the client.
-Plans live in memory (a restart forgets them); inputs persist in SQLite. Splitting the group into
+Inputs, members, questions and plan versions (proposals, the accepted plan and its history) persist in
+SQLite and survive a restart; the planner run in progress does not. Splitting the group into
 parallel activities is NOT supported."""
 from __future__ import annotations
 
@@ -21,12 +22,13 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from server.agent.model import ModelError, ModelProvider
 from server.agent.runner import RunLimits, run_agent
 from server.models import Location, Member, TimeWindow, Trip, local
+from server.planning.export import collect_facts, ics_from_version, version_summary
 from server.planning.overlap import best_window
 from server.providers.live import LiveWorld
 from server.providers.synthetic import SyntheticWorld
@@ -113,15 +115,6 @@ class DecisionIn(BaseModel):
 # --- in-memory plan state ---------------------------------------------------------
 
 @dataclass
-class PlanView:
-    proposal: Proposal
-    ctx: ToolContext
-    version: int  # group version the plan was built from
-    attendees: tuple[str, ...]
-    excluded: tuple[str, ...]
-
-
-@dataclass
 class GRun:
     id: str
     events: list[dict[str, Any]] = field(default_factory=list)
@@ -133,8 +126,8 @@ class GRun:
 
 @dataclass
 class Runtime:
-    candidate: PlanView | None = None
-    accepted: PlanView | None = None
+    candidate: dict[str, Any] | None = None  # {"seq": version number, "snap": stored snapshot}
+    accepted: dict[str, Any] | None = None
     run: GRun | None = None
     needs_replan: bool = False
 
@@ -173,7 +166,16 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
     runtimes: dict[str, Runtime] = {}
 
     def rt(gid: str) -> Runtime:
-        return runtimes.setdefault(gid, Runtime())
+        st = runtimes.get(gid)
+        if st is None:  # first touch since startup: reload the saved plan and any pending proposal
+            st = Runtime()
+            acc, prop = store.latest_version("group", gid, "accepted"), store.latest_version("group", gid, "proposal")
+            if acc:
+                st.accepted = {"seq": acc["seq"], "snap": acc["snapshot"]}
+            if prop:
+                st.candidate = {"seq": prop["seq"], "snap": prop["snapshot"]}
+            runtimes[gid] = st
+        return st
 
     def auth(gid: str, authorization: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
         group = store.get_group(gid)
@@ -304,8 +306,14 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
                                 on_event=lambda e: run.events.append({"seq": e.seq, "kind": e.kind, "summary": e.summary}))
                 run.status, run.message = res.status, res.message
                 if res.proposal:
-                    state.candidate = PlanView(res.proposal, ctx, version, tuple(m.id for m in trip.members),
-                                               tuple(sorted(bw.excluded)))
+                    all_names = {m["id"]: m["name"] for m in store.list_members(gid)}
+                    snap = make_snapshot(group, res.proposal, ctx, version,
+                                         [{"id": mid, "name": all_names.get(mid, "?")} for mid in sorted(bw.excluded)])
+                    places, evid = collect_facts(res.proposal.plan, ctx.details, ctx.evidence)
+                    seq = store.add_version("group", gid, "proposal", "proposal", snap,
+                                            plan=res.proposal.plan.model_dump_json(), places=places, evidence=evid,
+                                            explanation=res.proposal.explanation)
+                    state.candidate = {"seq": seq, "snap": snap}
                 elif res.status == "needs_clarification" and res.clarification:
                     run.message = "The planner needs more information: " + str(res.clarification.get("question", ""))
             except Exception as exc:  # never includes credentials
@@ -387,60 +395,64 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
         if state.candidate is None:
             raise HTTPException(409, "there is no proposal to decide on")
         if body.decision == "accept":
-            if state.candidate.version != group["version"]:
+            if state.candidate["snap"]["version"] != group["version"]:
                 raise HTTPException(409, "this proposal is stale: inputs changed since it was made. Plan again.")
+            store.set_status("group", gid, state.candidate["seq"], "accepted")
             state.accepted, state.candidate = state.candidate, None
         else:
+            store.set_status("group", gid, state.candidate["seq"], "rejected")
             state.candidate = None
         return {"decided": body.decision}
 
     # --- state (what each viewer is allowed to see) ----------------------------------------
 
-    def plan_json(view: PlanView, group: dict[str, Any], viewer: str) -> dict[str, Any]:
-        base = proposal_json(view.proposal, view.ctx)
-        rep = view.proposal.plan.validation
+    def make_snapshot(group: dict[str, Any], proposal: Proposal, ctx: ToolContext, version: int,
+                      excluded: list[dict[str, str]]) -> dict[str, Any]:
+        """Everything needed to show a plan to ANY viewer later. It holds private values (per-person cost,
+        private issue details); `render` is the only place they are filtered, per viewer."""
+        base = proposal_json(proposal, ctx)
+        rep = proposal.plan.validation
         assert rep is not None
-        issues = []
-        for c in rep.checks:
-            if c.status == "pass":
-                continue
-            if c.code in PRIVATE_CODES and viewer not in c.participant_ids:
-                msg = PRIVATE_CODES[c.code]  # others never see the person, the amount or the need
-            else:
-                msg = c.message
-            issues.append({"status": c.status, "code": c.code, "message": msg})
-        names = {m.id: m.display_name for m in view.ctx.trip.members}
-        blocks = base["blocks"]
+        text = " ".join(f"{b['name']} {' '.join(b.get('categories', []))}" for b in base["blocks"]).lower()
         people = []
-        for m in view.ctx.trip.members:
+        for m in ctx.trip.members:
             chk = next((c for c in rep.checks if c.code == "BUDGET_PER_PERSON" and c.participant_ids == (m.id,)), None)
             status = {"pass": "within budget", "fail": "over budget", "unknown": "budget unknown"}.get(chk.status if chk else "unknown")
-            text = " ".join(f"{b['name']} {' '.join(b.get('categories', []))}" for b in blocks).lower()
             hit = [i for i in m.interests if any(t in text for t in (i.lower(), *SYNONYMS.get(i.lower(), ())))]
-            row: dict[str, Any] = {"id": m.id, "name": m.display_name, "budget_status": status,
-                                   "fit": {"matched": hit, "total": len(m.interests)}}
-            if m.id == viewer:  # only you see your own amounts
-                t = rep.per_person_totals.get(m.id)
-                row["my_cost"] = None if t is None else {
-                    "low": t.low_minor / 100, "high": t.high_minor / 100,
-                    "cap": None if t.cap_minor is None else t.cap_minor / 100, "has_unknown": t.has_unknown}
-            people.append(row)
-        qs = {q["member_id"]: q for q in store.list_questions(group["id"])}
-        excluded = [{"id": mid, "name": (store_member_name(group["id"], mid)),
-                     "question": (qs.get(mid) or {}).get("status")} for mid in view.excluded]
-        tz = group["tz"]
-        out = {k: base[k] for k in ("id", "state", "overall", "explanation", "blocks", "legs", "checks_passed", "notes", "confidence", "verify")}
-        out.update({"issues": issues, "totals": None, "people": people, "excluded": excluded,
-                    "stale": view.version != group["version"], "window": _fmt_window(
-                        view.ctx.trip.window_start, view.ctx.trip.window_end, tz), "attending": viewer in names,
-                    "data": {"synthetic": bool(view.ctx.places.synthetic), "places": view.ctx.places.name}})
-        return out
+            t = rep.per_person_totals.get(m.id)
+            people.append({"id": m.id, "name": m.display_name, "budget_status": status,
+                           "fit": {"matched": hit, "total": len(m.interests)},
+                           "cost": None if t is None else {
+                               "low": t.low_minor / 100, "high": t.high_minor / 100,
+                               "cap": None if t.cap_minor is None else t.cap_minor / 100, "has_unknown": t.has_unknown}})
+        keep = ("id", "state", "overall", "explanation", "blocks", "legs", "checks_passed", "notes", "confidence", "verify", "date")
+        return {"base": {k: base[k] for k in keep}, "people": people, "excluded": excluded, "version": version,
+                "issues": [{"status": c.status, "code": c.code, "message": c.message, "participants": list(c.participant_ids)}
+                           for c in rep.checks if c.status != "pass"],
+                "window": _fmt_window(ctx.trip.window_start, ctx.trip.window_end, group["tz"]),
+                "data": {"synthetic": bool(ctx.places.synthetic), "places": ctx.places.name}}
 
-    def store_member_name(gid: str, mid: str) -> str:
-        for m in store.list_members(gid):
-            if m["id"] == mid:
-                return m["name"]
-        return "(removed)"
+    def render(entry: dict[str, Any], group: dict[str, Any], viewer: str) -> dict[str, Any]:
+        snap = entry["snap"]
+        issues = []
+        for i in snap["issues"]:
+            private = i["code"] in PRIVATE_CODES and viewer not in i["participants"]
+            issues.append({"status": i["status"], "code": i["code"],
+                           "message": PRIVATE_CODES[i["code"]] if private else i["message"]})
+        people = []
+        for p in snap["people"]:
+            row = {k: p[k] for k in ("id", "name", "budget_status", "fit")}
+            if p["id"] == viewer:  # only you see your own amounts
+                row["my_cost"] = p["cost"]
+            people.append(row)
+        qs = {q["member_id"]: q for q in store.list_questions(group["id"]) if q["status"] != "expired"}
+        out = dict(snap["base"])
+        out.update({"issues": issues, "totals": None, "people": people, "seq": entry["seq"],
+                    "excluded": [{"id": e["id"], "name": e["name"], "question": (qs.get(e["id"]) or {}).get("status")}
+                                 for e in snap["excluded"]],
+                    "stale": snap["version"] != group["version"], "window": snap["window"], "data": snap["data"],
+                    "attending": any(p["id"] == viewer for p in snap["people"])})
+        return out
 
     @app.get("/api/groups/{gid}")
     def get_group(gid: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
@@ -448,14 +460,8 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
         members = store.list_members(gid)
         inputs = store.all_inputs(gid)
         state = rt(gid)
-        view = state.candidate or state.accepted
-        status_by: dict[str, str] = {}
-        if view:
-            for m in view.ctx.trip.members:
-                chk = next((c for c in view.proposal.plan.validation.checks
-                            if c.code == "BUDGET_PER_PERSON" and c.participant_ids == (m.id,)), None)
-                status_by[m.id] = {"pass": "within budget", "fail": "over budget", "unknown": "budget unknown"}.get(
-                    chk.status if chk else "unknown", "budget unknown")
+        entry = state.candidate or state.accepted
+        status_by: dict[str, str] = {p["id"]: p["budget_status"] for p in entry["snap"]["people"]} if entry else {}
         pub = []
         for m in members:  # PUBLIC fields only: no budget, access or dietary needs
             inp = inputs.get(m["id"]) or {}
@@ -489,5 +495,39 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
                       "invite_token": group["invite_token"] if is_org else None},
             "me": {"id": me["id"], "name": me["name"], "role": me["role"], "inputs": my_inputs},
             "members": pub, "questions": questions, "run": run, "needs_replan": state.needs_replan and is_org,
-            "candidate": plan_json(state.candidate, group, me["id"]) if state.candidate else None,
-            "accepted": plan_json(state.accepted, group, me["id"]) if state.accepted else None}
+            "candidate": render(state.candidate, group, me["id"]) if state.candidate else None,
+            "accepted": render(state.accepted, group, me["id"]) if state.accepted else None,
+            "share_token": store.share_for("group", gid) if is_org else None}
+
+    # --- history, sharing, export, delete -------------------------------------------------
+
+    @app.get("/api/groups/{gid}/history")
+    def group_history(gid: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        auth(gid, authorization)
+        return {"versions": [version_summary(r) for r in store.list_versions("group", gid)]}
+
+    @app.post("/api/groups/{gid}/share")
+    def group_share(gid: str, body: InviteToggle, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        organizer(gid, authorization)
+        if not body.enabled:
+            store.revoke_share("group", gid)
+            return {"share_token": None}
+        if store.latest_version("group", gid, "accepted") is None:
+            raise HTTPException(409, "accept a plan before sharing it")
+        return {"share_token": store.share_for("group", gid) or store.create_share("group", gid)}
+
+    @app.get("/api/groups/{gid}/export.ics")
+    def group_ics(gid: str, authorization: str | None = Header(default=None)) -> Response:
+        group, _ = auth(gid, authorization)
+        row = store.latest_version("group", gid, "accepted")
+        if row is None or not row["plan"]:
+            raise HTTPException(404, "no accepted plan to export")
+        return Response(ics_from_version(row, group["title"], now_fn()), media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="sidequest-group-plan.ics"'})
+
+    @app.delete("/api/groups/{gid}")
+    def delete_group(gid: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        organizer(gid, authorization)
+        store.delete_group(gid)
+        runtimes.pop(gid, None)
+        return {"deleted": True}

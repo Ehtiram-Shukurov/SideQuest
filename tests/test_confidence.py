@@ -65,7 +65,9 @@ def test_missing_evidence_counts_as_not_verified_and_mixed_is_reported():
 
 def test_api_exposes_confidence_and_source_links():
     c = TestClient(create_app(lambda: ScriptedProvider(script()), lambda: NOW))
-    j = wait(c, c.post("/api/plans", json=BODY).json()["run_id"])
+    made = c.post("/api/plans", json=BODY).json()
+    c.headers["Authorization"] = "Bearer " + made["owner_token"]
+    j = wait(c, made["run_id"])
     p = j["result"]["proposal"]
     assert p["confidence"] == "verified" and p["verify"] == []  # demo data is flagged DEMO elsewhere
     assert all("url" in f for b in p["blocks"] for f in b["facts"])

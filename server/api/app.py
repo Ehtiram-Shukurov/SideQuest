@@ -8,7 +8,9 @@ replan proposal. One agent run at a time (free-tier friendly).
 
 The Gemini key stays server-side. Device location is sent by the browser with the plan request
 (location is REQUIRED); live tracking during the quest happens in the browser and is not sent
-to the server. Sessions live in memory: a server restart forgets them.
+to the server. Solo trips are owned by a bearer token (stored hashed); their plan versions,
+accepted pointer, history and share links persist in SQLite and survive a restart. A paused model
+conversation and an unanswered replan proposal do not survive a restart.
 """
 from __future__ import annotations
 
@@ -24,8 +26,8 @@ from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -34,7 +36,7 @@ from server.agent.model import ModelError, ModelProvider, ToolResult
 from server.agent.runner import RunLimits, run_agent, trip_snapshot
 from server.groups.routes import register_groups
 from server.groups.store import Store
-from server.models import Location, Member, TimeWindow, Trip, local
+from server.models import Evidence, Location, Member, Place, Plan, TimeWindow, Trip, local
 from server.planning.changes import (
     diff_plans,
     extend_window,
@@ -43,6 +45,15 @@ from server.planning.changes import (
     set_lock,
     set_minutes,
 )
+from server.planning.export import (
+    collect_facts,
+    directions_links,
+    ics_from_version,
+    public_view,
+    version_summary,
+)
+from server.planning.validators import validate_plan
+from server.providers.base import PlaceSummary
 from server.providers.live import LiveWorld
 from server.providers.synthetic import SyntheticWorld
 from server.tools.context import Proposal, ToolContext
@@ -81,6 +92,14 @@ class ReplanRequest(BaseModel):
     changes: list[Change] = Field(min_length=1, max_length=10)
 
 
+class RestoreRequest(BaseModel):
+    seq: int = Field(ge=1)
+
+
+class ShareToggle(BaseModel):
+    enabled: bool
+
+
 class DecisionRequest(BaseModel):
     decision: Literal["accept", "reject"]
 
@@ -109,8 +128,10 @@ class TripSession:
     id: str
     req: PlanRequest
     ctx: ToolContext
-    provider: ModelProvider
+    provider: ModelProvider | None
     current: Proposal | None = None  # the saved plan the user is working with
+    current_seq: int | None = None  # its version number in the store
+    candidate_seq: int | None = None
     candidate: Proposal | None = None  # a replan proposal waiting for accept / reject
     checkpoint: tuple[Trip, set[str]] | None = None  # trip + exclusions before a replan
     model_session: Any = None  # paused model conversation (only while a question is open)
@@ -198,7 +219,8 @@ def proposal_json(prop: Proposal, ctx: ToolContext) -> dict[str, Any]:
             "blocks": blocks, "legs": legs, "issues": issues, "totals": totals, "confidence": rep.confidence,
             "verify": [{"block_id": v.block_id, "name": v.name, "field": v.field, "source": v.source, "url": v.url}
                        for v in rep.verify],
-            "checks_passed": sum(1 for c in rep.checks if c.status == "pass"), "notes": notes}
+            "checks_passed": sum(1 for c in rep.checks if c.status == "pass"), "notes": notes,
+            "date": f"{local(plan.blocks[0].start, tz):%a %b %d}" if plan.blocks else None}
 
 
 def build_result(sess: TripSession, *, status: str, message: str = "", proposal: Proposal | None = None,
@@ -211,6 +233,9 @@ def build_result(sess: TripSession, *, status: str, message: str = "", proposal:
         clar = {"question": clarification.get("question", ""), "allow_text": True,
                 "choices": [{"index": i, "label": c["label"], "kind": c["type"]}
                             for i, c in enumerate(sess.choices)]}
+    prop = proposal_json(proposal, ctx) if proposal else None
+    if prop:  # the owner's own links may start and end at their location
+        prop["directions"] = directions_links(prop["blocks"], prop["legs"], {"lat": ctx.trip.origin.lat, "lon": ctx.trip.origin.lon})
     return {
         "status": status, "message": message, "trip_id": sess.id, "clarification": clar,
         "conflict": conflict, "tool_calls": tool_calls, "tokens": tokens, "diff": diff,
@@ -218,7 +243,7 @@ def build_result(sess: TripSession, *, status: str, message: str = "", proposal:
         "weather": _weather_json(ctx),
         "data": {"places": ctx.places.name, "synthetic": bool(ctx.places.synthetic)},
         "origin": {"lat": ctx.trip.origin.lat, "lon": ctx.trip.origin.lon},
-        "proposal": proposal_json(proposal, ctx) if proposal else None}
+        "proposal": prop}
 
 
 def build_choices(ctx: ToolContext, clarification: dict[str, Any] | None,
@@ -272,14 +297,66 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
     runs: dict[str, Run] = {}
     sessions: dict[str, TripSession] = {}
     busy = threading.Lock()  # one agent run at a time (solo and group share it)
-    register_groups(app, store=Store(db_path), provider_factory=provider_factory, now_fn=now_fn, busy=busy,
+    store = Store(db_path)
+    register_groups(app, store=store, provider_factory=provider_factory, now_fn=now_fn, busy=busy,
                     limits=LIMITS, proposal_json=proposal_json)
 
-    def get_session(trip_id: str) -> TripSession:
-        sess = sessions.get(trip_id)
-        if sess is None:
-            raise HTTPException(404, "unknown trip (the server may have restarted)")
+    def make_world(req: PlanRequest, trip: Trip, now: datetime) -> Any:
+        return SyntheticWorld(trip, now=now) if req.data == "demo" else LiveWorld(
+            lat=req.lat, lon=req.lon, tz=req.tz, origin_id="here", now=now)
+
+    def rehydrate(trip_id: str) -> TripSession | None:
+        """Rebuild a session from the store after a restart (or eviction). The accepted plan, its
+        facts and its locks come back; the paused model conversation and a pending proposal do not."""
+        row = store.get_solo(trip_id)
+        if row is None:
+            return None
+        req, trip, now = PlanRequest.model_validate_json(row["req"]), Trip.model_validate_json(row["trip"]), now_fn()
+        world = make_world(req, trip, now)
+        ctx = ToolContext(trip=trip, places=world, routes=world, weather=world, now=now)
+        sess = TripSession(trip_id, req, ctx, None)
+        acc = store.latest_version("solo", trip_id, "accepted")
+        if acc and acc["plan"]:
+            plan = Plan.model_validate_json(acc["plan"])
+            places = {pid: Place.model_validate(d) for pid, d in (acc["places"] or {}).items()}
+            ctx.details.update(places)
+            ctx.evidence.update({eid: Evidence.model_validate(d) for eid, d in (acc["evidence"] or {}).items()})
+            ctx.candidates.update({pid: PlaceSummary(pid, p.name, p.categories, p.lat, p.lon, "stored plan",
+                                                     bool(world.synthetic)) for pid, p in places.items()})
+            if isinstance(world, LiveWorld):
+                world.register_points({pid: (p.lat, p.lon) for pid, p in places.items()})
+            sess.current = Proposal(id=f"prop-v{acc['seq']}", plan=plan, explanation=acc["explanation"], evidence_ids=())
+            sess.current_seq, ctx.base_plan = acc["seq"], plan
+        pending = store.latest_version("solo", trip_id, "proposal")
+        if pending:  # its constraint changes were never saved, so it cannot be resumed safely
+            store.set_status("solo", trip_id, pending["seq"], "superseded")
+        sessions[trip_id] = sess
         return sess
+
+    def get_session(trip_id: str) -> TripSession:
+        sess = sessions.get(trip_id) or rehydrate(trip_id)
+        if sess is None:
+            raise HTTPException(404, "unknown trip")
+        return sess
+
+    def solo_auth(trip_id: str, authorization: str | None) -> TripSession:
+        if store.get_solo(trip_id) is None:
+            raise HTTPException(404, "unknown trip")
+        token = (authorization or "").removeprefix("Bearer ").strip()
+        if not token or store.solo_by_token(trip_id, token) is None:
+            raise HTTPException(401, "this trip needs its owner token")
+        return get_session(trip_id)
+
+    def record_version(sess: TripSession, kind: str, status: str, proposal: Proposal, *,
+                       diff: dict[str, Any] | None = None, restored_from: int | None = None) -> int:
+        snap = build_result(sess, status="proposal_saved", proposal=proposal)
+        places, evid = collect_facts(proposal.plan, sess.ctx.details, sess.ctx.evidence)
+        return store.add_version("solo", sess.id, kind, status, snap, plan=proposal.plan.model_dump_json(),
+                                 places=places, evidence=evid, diff=diff, explanation=proposal.explanation,
+                                 restored_from=restored_from)
+
+    def save_trip(sess: TripSession) -> None:
+        store.update_solo_trip(sess.id, sess.ctx.trip.model_dump_json())
 
     def restore(sess: TripSession) -> None:
         if sess.checkpoint:
@@ -313,9 +390,12 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
                     sess.candidate, awaiting = res.proposal, True
                     if sess.current:
                         diff = diff_plans(sess.current.plan, res.proposal.plan, ctx.trip.timezone)
+                    sess.candidate_seq = record_version(sess, "replan", "proposal", res.proposal, diff=diff)
                 elif res.proposal:
                     sess.current, sess.checkpoint = res.proposal, None
                     ctx.base_plan = res.proposal.plan
+                    sess.current_seq = record_version(sess, "plan", "accepted", res.proposal)
+                    save_trip(sess)
                 elif kind == "replan" and res.status != "needs_clarification":
                     restore(sess)  # the replan produced nothing: keep the saved plan and its constraints
                 run.result = build_result(sess, status=res.status, message=res.message, proposal=res.proposal,
@@ -359,33 +439,34 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
         if not busy.acquire(blocking=False):
             return JSONResponse({"detail": "A plan is already running; wait for it to finish."}, status_code=429)
         try:
-            world: Any = SyntheticWorld(trip, now=now) if req.data == "demo" else LiveWorld(
-                lat=req.lat, lon=req.lon, tz=req.tz, origin_id="here", now=now)
+            world = make_world(req, trip, now)
             ctx = ToolContext(trip=trip, places=world, routes=world, weather=world, now=now)
             sess = TripSession(trip.id, req, ctx, provider)
             sessions[trip.id] = sess
             for old in list(sessions)[:-20]:
                 sessions.pop(old, None)
+            owner_token = store.create_solo(trip.id, req.model_dump_json(), trip.model_dump_json())
             run_id = launch(sess, "plan")
         except Exception:
             busy.release()
             raise
-        return {"run_id": run_id, "trip_id": trip.id}
+        return {"run_id": run_id, "trip_id": trip.id, "owner_token": owner_token}
 
     @app.get("/api/runs/{run_id}")
-    def get_run(run_id: str) -> dict[str, Any]:
+    def get_run(run_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         run = runs.get(run_id)
         if run is None:
             raise HTTPException(404, "unknown run")
+        solo_auth(run.trip_id, authorization)
         return {"done": run.done, "events": run.events, "result": run.result, "error": run.error,
                 "trip_id": run.trip_id, "kind": run.kind}
 
     @app.post("/api/runs/{run_id}/answer")
-    def answer(run_id: str, body: AnswerRequest):
+    def answer(run_id: str, body: AnswerRequest, authorization: str | None = Header(default=None)):
         run = runs.get(run_id)
         if run is None:
             raise HTTPException(404, "unknown run")
-        sess = get_session(run.trip_id)
+        sess = solo_auth(run.trip_id, authorization)
         if not run.done or sess.pending_run_id != run_id:
             raise HTTPException(409, "that question is no longer open")
         if body.choice is None and not body.text:
@@ -415,14 +496,14 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
         return {"run_id": new_id, "trip_id": sess.id}
 
     @app.get("/api/trips/{trip_id}")
-    def get_trip(trip_id: str) -> dict[str, Any]:
-        sess = get_session(trip_id)
+    def get_trip(trip_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        sess = solo_auth(trip_id, authorization)
         return {"result": render_current(sess) if sess.current else None,
-                "pending_replan": sess.candidate is not None}
+                "pending_replan": sess.candidate is not None, "share_token": store.share_for("solo", trip_id)}
 
     @app.post("/api/trips/{trip_id}/replan")
-    def replan(trip_id: str, body: ReplanRequest):
-        sess = get_session(trip_id)
+    def replan(trip_id: str, body: ReplanRequest, authorization: str | None = Header(default=None)):
+        sess = solo_auth(trip_id, authorization)
         if sess.current is None:
             raise HTTPException(409, "there is no saved plan to change yet")
         if sess.candidate is not None:
@@ -442,6 +523,10 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
             if c.type in ("lock", "unlock"):
                 plan = set_lock(plan, c.block_id, c.type == "lock")
         sess.current = dataclasses.replace(sess.current, plan=plan)
+        if sess.current_seq is not None and any(c.type in ("lock", "unlock") for c in body.changes):
+            # lock flags are the one in-place edit of a stored version
+            store.update_version("solo", sess.id, sess.current_seq, snapshot=render_current(sess),
+                                 plan=plan.model_dump_json())
         rest = [c for c in body.changes if c.type not in ("lock", "unlock")]
         if not rest:
             ctx.base_plan = plan
@@ -492,17 +577,109 @@ def create_app(provider_factory: Callable[[], ModelProvider] = provider_from_env
         return {"run_id": run_id, "trip_id": sess.id}
 
     @app.post("/api/trips/{trip_id}/decision")
-    def decision(trip_id: str, body: DecisionRequest) -> dict[str, Any]:
-        sess = get_session(trip_id)
+    def decision(trip_id: str, body: DecisionRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        sess = solo_auth(trip_id, authorization)
         if sess.candidate is None:
             raise HTTPException(409, "there is no pending change to decide on")
         if body.decision == "accept":
             sess.current, sess.candidate, sess.checkpoint = sess.candidate, None, None
             sess.ctx.base_plan = sess.current.plan
+            if sess.candidate_seq is not None:
+                store.set_status("solo", sess.id, sess.candidate_seq, "accepted")
+                sess.current_seq, sess.candidate_seq = sess.candidate_seq, None
+            save_trip(sess)
         else:
             sess.candidate = None
+            if sess.candidate_seq is not None:
+                store.set_status("solo", sess.id, sess.candidate_seq, "rejected")
+                sess.candidate_seq = None
             restore(sess)
         return {"decided": body.decision, "trip_id": sess.id, "result": render_current(sess)}
+
+    # --- saved plans: history, restore, share, export, delete -------------------------
+
+    @app.get("/api/trips/{trip_id}/history")
+    def trip_history(trip_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        solo_auth(trip_id, authorization)
+        return {"versions": [version_summary(r) for r in store.list_versions("solo", trip_id)]}
+
+    @app.post("/api/trips/{trip_id}/restore")
+    def restore_version(trip_id: str, body: RestoreRequest, authorization: str | None = Header(default=None)):
+        """Re-validate an older version against today's constraints and, if it still holds, save it as
+        a NEW version. History is never rewritten; a version that no longer fits is refused."""
+        sess = solo_auth(trip_id, authorization)
+        if sess.candidate is not None or sess.pending_run_id is not None:
+            raise HTTPException(409, "decide on the pending change or answer the open question first")
+        row = store.get_version("solo", trip_id, body.seq)
+        if row is None or not row["plan"] or row["status"] == "rejected":
+            raise HTTPException(404, "that version cannot be restored")
+        ctx = sess.ctx
+        plan = Plan.model_validate_json(row["plan"])
+        places = {pid: Place.model_validate(d) for pid, d in (row["places"] or {}).items()}
+        evid = {eid: Evidence.model_validate(d) for eid, d in (row["evidence"] or {}).items()}
+        report = validate_plan(ctx.trip, plan, places, forecast=ctx.forecast, evidence=evid)
+        if report.overall == "failed":
+            return JSONResponse({"detail": "That version no longer fits your current constraints.",
+                                 "issues": [{"code": c.code, "message": c.message} for c in report.checks
+                                            if c.status == "fail"][:6]}, status_code=409)
+        new = plan.model_copy(update={
+            "id": f"restore-v{body.seq}-{uuid.uuid4().hex[:4]}", "state": "provisional" if report.overall == "provisional" else "ready",
+            "validation": report, "base_constraints_version": ctx.trip.constraints_version})
+        ctx.details.update(places)
+        ctx.evidence.update(evid)
+        prop = Proposal(id=f"prop-restore-v{body.seq}", plan=new, explanation=f"Restored from version {body.seq}.", evidence_ids=())
+        sess.current, ctx.base_plan = prop, new
+        sess.current_seq = record_version(sess, "restore", "accepted", prop, restored_from=body.seq)
+        save_trip(sess)
+        return {"trip_id": sess.id, "result": render_current(sess)}
+
+    @app.post("/api/trips/{trip_id}/share")
+    def trip_share(trip_id: str, body: ShareToggle, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        sess = solo_auth(trip_id, authorization)
+        if not body.enabled:
+            store.revoke_share("solo", trip_id)
+            return {"share_token": None}
+        if sess.current is None:
+            raise HTTPException(409, "save a plan first")
+        return {"share_token": store.share_for("solo", trip_id) or store.create_share("solo", trip_id)}
+
+    @app.get("/api/trips/{trip_id}/export.ics")
+    def trip_ics(trip_id: str, authorization: str | None = Header(default=None)) -> Response:
+        solo_auth(trip_id, authorization)
+        row = store.latest_version("solo", trip_id, "accepted")
+        if row is None or not row["plan"]:
+            raise HTTPException(404, "no saved plan to export")
+        return Response(ics_from_version(row, "SideQuest plan", now_fn()), media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="sidequest-plan.ics"'})
+
+    @app.delete("/api/trips/{trip_id}")
+    def trip_delete(trip_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        solo_auth(trip_id, authorization)
+        store.delete_solo(trip_id)
+        sessions.pop(trip_id, None)
+        return {"deleted": True}
+
+    def shared_parts(token: str):
+        sh = store.share_by_token(token)
+        ver = store.latest_version(sh["owner_kind"], sh["owner_id"], "accepted") if sh else None
+        if sh is None or ver is None:
+            raise HTTPException(404, "this share link is invalid, revoked or has no plan yet")
+        snap = ver["snapshot"]
+        if sh["owner_kind"] == "solo":
+            return ver, snap["proposal"], snap["data"]["synthetic"], "A SideQuest plan"
+        g = store.get_group(sh["owner_id"])
+        return ver, snap["base"], snap["data"]["synthetic"], (g["title"] if g else "A SideQuest group plan")
+
+    @app.get("/api/shared/{token}")
+    def shared_plan(token: str) -> dict[str, Any]:
+        _, base, synthetic, title = shared_parts(token)
+        return public_view(base, title=title, synthetic=synthetic)
+
+    @app.get("/api/shared/{token}/export.ics")
+    def shared_ics(token: str) -> Response:
+        ver, _, _, title = shared_parts(token)
+        return Response(ics_from_version(ver, title, now_fn()), media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="sidequest-plan.ics"'})
 
     @app.get("/")
     def index() -> FileResponse:

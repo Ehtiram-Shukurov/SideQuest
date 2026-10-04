@@ -113,6 +113,10 @@ class LiveWorld:
         self._elements: dict[str, dict] | None = None
         self._points: dict[str, tuple[float, float]] = {origin_id: (lat, lon)}
 
+    def register_points(self, points: dict[str, tuple[float, float]]) -> None:
+        """Make already-known places routable without re-querying (used when a saved trip is restored)."""
+        self._points.update(points)
+
     # --- places (Overpass) -------------------------------------------------------
 
     def _load(self) -> dict[str, dict]:

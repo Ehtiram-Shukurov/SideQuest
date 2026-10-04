@@ -29,6 +29,11 @@ def wait(client, rid):
     raise AssertionError("run did not finish")
 
 
+def authed(c, made):
+    c.headers["Authorization"] = "Bearer " + made["owner_token"]
+    return made
+
+
 BODY = {"request": "a museum", "lat": 44.97, "lon": -93.26, "tz": "America/Chicago", "minutes": 30,
         "budget_dollars": 40, "mode": "walk", "data": "demo"}
 
@@ -42,7 +47,7 @@ def test_answering_a_clarification_applies_a_structured_change_and_resumes_the_r
               tc("validate_plan", plan_id="plan-1"),
               tc("save_proposal", plan_id="plan-1", explanation="Museum with a longer window.")]
     c = TestClient(create_app(lambda: ScriptedProvider(script), lambda: NOW))
-    r = c.post("/api/plans", json=BODY).json()
+    r = authed(c, c.post("/api/plans", json=BODY).json())
     first = wait(c, r["run_id"])
     q = first["result"]["clarification"]
     assert first["result"]["status"] == "needs_clarification" and first["result"]["constraints"]["minutes"] == 30
@@ -69,7 +74,7 @@ def test_replan_swaps_a_stop_shows_a_diff_and_waits_for_accept():
              tc("save_proposal", plan_id="plan-2", explanation="An overlook instead.")]
     scripts = [plan1, plan2]
     c = TestClient(create_app(lambda: ScriptedProvider(scripts.pop(0)), lambda: NOW))
-    r = c.post("/api/plans", json={**BODY, "minutes": 180}).json()
+    r = authed(c, c.post("/api/plans", json={**BODY, "minutes": 180}).json())
     saved = wait(c, r["run_id"])["result"]
     assert saved["proposal"]["overall"] == "checked"
     tid = r["trip_id"]

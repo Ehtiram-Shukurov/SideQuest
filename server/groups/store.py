@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS questions(
   win_end TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
   alt_start TEXT, alt_end TEXT, created_at TEXT NOT NULL, answered_at TEXT,
   UNIQUE(member_id, win_start, win_end));
+CREATE TABLE IF NOT EXISTS solo_trips(
+  id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, req TEXT NOT NULL, trip TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS plan_versions(
+  id TEXT PRIMARY KEY, owner_kind TEXT NOT NULL, owner_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL,
+  status TEXT NOT NULL, snapshot TEXT NOT NULL, plan TEXT, places TEXT, evidence TEXT, diff TEXT,
+  explanation TEXT NOT NULL DEFAULT '', restored_from INTEGER, created_at TEXT NOT NULL,
+  UNIQUE(owner_kind, owner_id, seq));
+CREATE TABLE IF NOT EXISTS shares(
+  token TEXT PRIMARY KEY, owner_kind TEXT NOT NULL, owner_id TEXT NOT NULL, created_at TEXT NOT NULL);
 """
 
 
@@ -195,3 +204,123 @@ class Store:
             self._db.execute("UPDATE questions SET status = ?, alt_start = ?, alt_end = ?, answered_at = ? "
                              "WHERE id = ? AND group_id = ?", (status, alt[0] if alt else None, alt[1] if alt else None,
                                                                _now(), qid, gid))
+
+    # --- solo trips ------------------------------------------------------------------
+
+    def create_solo(self, trip_id: str, req_json: str, trip_json: str) -> str:
+        token = new_token()
+        with self._lock, self._db:
+            self._db.execute("INSERT INTO solo_trips(id,token_hash,req,trip,created_at) VALUES(?,?,?,?,?)",
+                             (trip_id, hash_token(token), req_json, trip_json, _now()))
+        return token
+
+    def get_solo(self, trip_id: str) -> dict[str, Any] | None:
+        return self._one("SELECT * FROM solo_trips WHERE id = ?", (trip_id,))
+
+    def solo_by_token(self, trip_id: str, token: str) -> dict[str, Any] | None:
+        return self._one("SELECT * FROM solo_trips WHERE id = ? AND token_hash = ?", (trip_id, hash_token(token)))
+
+    def update_solo_trip(self, trip_id: str, trip_json: str) -> None:
+        with self._lock, self._db:
+            self._db.execute("UPDATE solo_trips SET trip = ? WHERE id = ?", (trip_json, trip_id))
+
+    def delete_solo(self, trip_id: str) -> None:
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM plan_versions WHERE owner_kind='solo' AND owner_id = ?", (trip_id,))
+            self._db.execute("DELETE FROM shares WHERE owner_kind='solo' AND owner_id = ?", (trip_id,))
+            self._db.execute("DELETE FROM solo_trips WHERE id = ?", (trip_id,))
+
+    def delete_group(self, gid: str) -> None:
+        """Remove a group and everything attached to it."""
+        with self._lock, self._db:
+            mids = [r[0] for r in self._db.execute("SELECT id FROM members WHERE group_id = ?", (gid,)).fetchall()]
+            for mid in mids:
+                self._db.execute("DELETE FROM inputs WHERE member_id = ?", (mid,))
+            for table in ("questions", "members"):
+                self._db.execute(f"DELETE FROM {table} WHERE group_id = ?", (gid,))
+            self._db.execute("DELETE FROM plan_versions WHERE owner_kind='group' AND owner_id = ?", (gid,))
+            self._db.execute("DELETE FROM shares WHERE owner_kind='group' AND owner_id = ?", (gid,))
+            self._db.execute("DELETE FROM groups WHERE id = ?", (gid,))
+
+    # --- plan versions (immutable snapshots; only the status and lock flags change) --
+
+    @staticmethod
+    def _ver(row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        for k in ("snapshot", "places", "evidence", "diff"):
+            row[k] = json.loads(row[k]) if row.get(k) else None
+        return row
+
+    def add_version(self, owner_kind: str, owner_id: str, kind: str, status: str, snapshot: dict[str, Any], *,
+                    plan: str | None = None, places: dict | None = None, evidence: dict | None = None,
+                    diff: dict | None = None, explanation: str = "", restored_from: int | None = None) -> int:
+        with self._lock, self._db:
+            seq = self._db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM plan_versions WHERE owner_kind=? AND owner_id=?",
+                                   (owner_kind, owner_id)).fetchone()[0]
+            if status == "accepted":
+                self._db.execute("UPDATE plan_versions SET status='superseded' WHERE owner_kind=? AND owner_id=? "
+                                 "AND status='accepted'", (owner_kind, owner_id))
+            if status == "proposal":
+                self._db.execute("UPDATE plan_versions SET status='superseded' WHERE owner_kind=? AND owner_id=? "
+                                 "AND status='proposal'", (owner_kind, owner_id))
+            self._db.execute(
+                "INSERT INTO plan_versions(id,owner_kind,owner_id,seq,kind,status,snapshot,plan,places,evidence,diff,"
+                "explanation,restored_from,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (_new_id(), owner_kind, owner_id, seq, kind, status, json.dumps(snapshot), plan,
+                 json.dumps(places) if places is not None else None, json.dumps(evidence) if evidence is not None else None,
+                 json.dumps(diff) if diff is not None else None, explanation, restored_from, _now()))
+        return seq
+
+    def set_status(self, owner_kind: str, owner_id: str, seq: int, status: str) -> None:
+        with self._lock, self._db:
+            if status == "accepted":
+                self._db.execute("UPDATE plan_versions SET status='superseded' WHERE owner_kind=? AND owner_id=? "
+                                 "AND status='accepted'", (owner_kind, owner_id))
+            self._db.execute("UPDATE plan_versions SET status=? WHERE owner_kind=? AND owner_id=? AND seq=?",
+                             (status, owner_kind, owner_id, seq))
+
+    def update_version(self, owner_kind: str, owner_id: str, seq: int, *, snapshot: dict | None = None,
+                       plan: str | None = None) -> None:
+        """Lock flags are the only in-place edit; everything else about a version is immutable."""
+        with self._lock, self._db:
+            if snapshot is not None:
+                self._db.execute("UPDATE plan_versions SET snapshot=? WHERE owner_kind=? AND owner_id=? AND seq=?",
+                                 (json.dumps(snapshot), owner_kind, owner_id, seq))
+            if plan is not None:
+                self._db.execute("UPDATE plan_versions SET plan=? WHERE owner_kind=? AND owner_id=? AND seq=?",
+                                 (plan, owner_kind, owner_id, seq))
+
+    def get_version(self, owner_kind: str, owner_id: str, seq: int) -> dict[str, Any] | None:
+        return self._ver(self._one("SELECT * FROM plan_versions WHERE owner_kind=? AND owner_id=? AND seq=?",
+                                   (owner_kind, owner_id, seq)))
+
+    def latest_version(self, owner_kind: str, owner_id: str, status: str) -> dict[str, Any] | None:
+        return self._ver(self._one("SELECT * FROM plan_versions WHERE owner_kind=? AND owner_id=? AND status=? "
+                                   "ORDER BY seq DESC LIMIT 1", (owner_kind, owner_id, status)))
+
+    def list_versions(self, owner_kind: str, owner_id: str) -> list[dict[str, Any]]:
+        rows = self._all("SELECT seq,kind,status,snapshot,diff,restored_from,created_at FROM plan_versions "
+                         "WHERE owner_kind=? AND owner_id=? ORDER BY seq DESC", (owner_kind, owner_id))
+        return [self._ver(r) for r in rows]  # type: ignore[misc]
+
+    # --- share links (read-only, revocable; one active link per trip) -----------------
+
+    def create_share(self, owner_kind: str, owner_id: str) -> str:
+        token = new_token()
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM shares WHERE owner_kind=? AND owner_id=?", (owner_kind, owner_id))
+            self._db.execute("INSERT INTO shares(token,owner_kind,owner_id,created_at) VALUES(?,?,?,?)",
+                             (token, owner_kind, owner_id, _now()))
+        return token
+
+    def revoke_share(self, owner_kind: str, owner_id: str) -> None:
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM shares WHERE owner_kind=? AND owner_id=?", (owner_kind, owner_id))
+
+    def share_for(self, owner_kind: str, owner_id: str) -> str | None:
+        row = self._one("SELECT token FROM shares WHERE owner_kind=? AND owner_id=?", (owner_kind, owner_id))
+        return row["token"] if row else None
+
+    def share_by_token(self, token: str) -> dict[str, Any] | None:
+        return self._one("SELECT * FROM shares WHERE token = ?", (token,))

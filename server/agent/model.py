@@ -17,7 +17,13 @@ class ModelError(RuntimeError):
 
 
 class ModelRateLimited(ModelError):
-    """Rate limit or temporary overload persisted after bounded retries."""
+    """Rate limit or temporary overload persisted after bounded retries.
+
+    `daily` means the model's daily quota is used up: waiting will not help, so callers switch model."""
+
+    def __init__(self, message: str, daily: bool = False) -> None:
+        super().__init__(message)
+        self.daily = daily
 
 
 @dataclass(frozen=True)

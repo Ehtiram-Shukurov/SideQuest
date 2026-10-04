@@ -13,6 +13,10 @@ from .model import ModelError, ModelProvider
 
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"  # free tier: gemini-3.8-flash allows only 20 requests/day; override with GEMINI_MODEL
 
+# Free-tier quotas are per model, so these give extra daily runs when the main model runs out.
+# Override with GEMINI_FALLBACK_MODELS (comma separated), or set it to "none" to disable.
+DEFAULT_FALLBACKS = "gemini-3.5-flash,gemini-3.6-flash,gemini-3.1-flash-lite"
+
 
 def load_dotenv(path: Path | str = ".env") -> None:
     """Minimal .env loader: KEY=VALUE lines; real environment variables win."""
@@ -32,6 +36,8 @@ def load_dotenv(path: Path | str = ".env") -> None:
 def provider_from_env() -> ModelProvider:
     name = os.environ.get("SIDEQUEST_MODEL_PROVIDER", "gemini").lower()
     if name == "gemini":
+        raw = os.environ.get("GEMINI_FALLBACK_MODELS", DEFAULT_FALLBACKS)
+        fallbacks = [] if raw.strip().lower() == "none" else [m.strip() for m in raw.split(",") if m.strip()]
         return GeminiProvider(os.environ.get("GEMINI_API_KEY", ""),
-                              os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL))
+                              os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL, fallback_models=fallbacks)
     raise ModelError(f"unknown SIDEQUEST_MODEL_PROVIDER {name!r}")

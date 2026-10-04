@@ -34,6 +34,7 @@ class GeminiProvider:
 
     def __init__(self, api_key: str, model: str, *, client: httpx.Client | None = None,
                  base_url: str = BASE_URL, max_retries: int = 3, backoff_s: float = 5.0, max_wait_s: float = 60.0,
+                 fallback_models: Sequence[str] = (),
                  sleep: Callable[[float], None] = time.sleep, timeout_s: float = 60.0):
         if not api_key:
             raise ModelError("GEMINI_API_KEY is not set")
@@ -44,6 +45,7 @@ class GeminiProvider:
         self._max_retries = max_retries
         self._backoff = backoff_s
         self._max_wait = max_wait_s
+        self.fallbacks = tuple(fallback_models)  # tried in order when a NEW session cannot start on `model`
         self._sleep = sleep
 
     def _wait_s(self, resp: httpx.Response, attempt: int) -> float:
@@ -63,6 +65,8 @@ class GeminiProvider:
                 resp = self._client.post(url, json=body, headers=headers)
             except httpx.HTTPError as exc:  # network failure; the key is never in the message
                 raise ModelError(f"Gemini request failed: {type(exc).__name__}") from None
+            if resp.status_code == 429 and "per day" in _error_text(resp).lower():
+                raise ModelRateLimited(f"{body.get('model')} has used its daily quota", daily=True)  # waiting will not help
             if resp.status_code in RETRY_STATUSES and attempt < self._max_retries:
                 self._sleep(self._wait_s(resp, attempt))
                 continue
@@ -78,6 +82,8 @@ class GeminiProvider:
 class GeminiSession:
     def __init__(self, provider: GeminiProvider, system: str, tools: tuple[ToolSpec, ...]):
         self._p = provider
+        self._model = provider.model
+        self.note: str | None = None  # set when this session had to use a fallback model
         self._system = system
         self._tools = [{"type": "function", "name": t.name, "description": t.description,
                         "parameters": t.parameters} for t in tools]
@@ -91,11 +97,26 @@ class GeminiSession:
                              "result": [{"type": "text", "text": r.content}]} for r in tool_results]
         else:
             payload = user
-        body: dict[str, Any] = {"model": self._p.model, "input": payload,
+        body: dict[str, Any] = {"model": self._model, "input": payload,
                                 "system_instruction": self._system, "tools": self._tools}
         if self._previous_id:
             body["previous_interaction_id"] = self._previous_id
-        data = self._p._post(body)
+        # Only a session that has not started yet may change model: a running conversation is tied to its model.
+        models = [self._model] + ([m for m in self._p.fallbacks if m != self._model] if self._previous_id is None else [])
+        data, last = None, None
+        for m in models:
+            body["model"] = m
+            try:
+                data = self._p._post(body)
+            except ModelRateLimited as exc:
+                last = exc
+                continue
+            if m != self._model:
+                self.note = f"{self._model} is out of free quota or overloaded; using {m} for this run."
+                self._model = m
+            break
+        if data is None:
+            raise last  # type: ignore[misc]
 
         status = data.get("status")
         if status in {"failed", "cancelled"}:

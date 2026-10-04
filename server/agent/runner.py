@@ -177,6 +177,9 @@ def run_agent(*, provider: ModelProvider, ctx: ToolContext, request: str,
                 {"request": request, "trip": trip_snapshot(ctx.trip, group=ctx.private_mode)}, ensure_ascii=False)
             turn = session.send(user=first)
         add_usage(turn.usage)
+        note = getattr(session, "note", None)
+        if note:  # a fallback model is in use: make that visible in the run's activity feed
+            emit("info", note)
         for _ in range(limits.max_turns):
             if should_cancel():
                 emit("cancelled", "Run cancelled")

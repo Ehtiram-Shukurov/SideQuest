@@ -230,7 +230,8 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
         plan = ctx.plans.get(a.plan_id)
         if plan is None:
             return error("unknown_plan", f"no plan {a.plan_id!r}; assemble_plan first", known=sorted(ctx.plans))
-        report = validate(ctx.trip, plan, ctx.details, forecast=ctx.forecast, base_plan=ctx.base_plan)
+        report = validate(ctx.trip, plan, ctx.details, forecast=ctx.forecast, base_plan=ctx.base_plan,
+                          evidence=ctx.evidence)
         ctx.validations_run += 1
         overall = report.overall
         state = {"checked": "ready", "provisional": "provisional", "failed": "draft"}[overall]
@@ -239,7 +240,8 @@ def build_registry(ctx: ToolContext) -> ToolRegistry:
         issues = sorted((c for c in report.checks if c.status != "pass"), key=lambda c: order[c.status])
         counts = {s: sum(1 for c in report.checks if c.status == s) for s in ("pass", "fail", "unknown")}
         data: dict[str, Any] = {
-            "plan_id": a.plan_id, "overall": overall, "counts": counts,
+            "plan_id": a.plan_id, "overall": overall, "counts": counts, "confidence": report.confidence,
+            "verify_before_going": [{"stop": v.name, "fact": v.field} for v in report.verify][:8],
             "issues": [{"code": c.code, "status": c.status, "message": c.message,
                         "participants": list(c.participant_ids), "blocks": list(c.block_ids),
                         "data": c.data} for c in issues[:12]],

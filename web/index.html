@@ -196,6 +196,10 @@
   .empty{text-align:center;padding:44px 20px;color:var(--mute)}
   footer{max-width:1240px;margin:0 auto;padding:6px 16px 90px;color:var(--mute);font-size:12.5px}
 
+  .verify{margin-top:14px;padding:12px 14px;border:1.5px solid var(--warn);border-radius:12px;background:var(--warn-bg);color:var(--ink)}
+  .verify .top{display:flex;gap:8px;align-items:center;color:var(--warn)} .verify ul{margin:8px 0 0;padding-left:20px;font-size:14px}
+  .verify a{color:var(--brand);font-weight:700}
+
   /* ---------- group trips ---------- */
   .segmented{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);margin-top:12px}
   .segmented button{background:transparent;color:var(--mute);border-radius:10px;min-height:42px}
@@ -713,6 +717,21 @@ function factChip(f) {
   return h('span', { class: 'mini ' + (f.status === 'unknown' ? 'warn' : f.status === 'verified' ? 'ok' : '') }, names[f.field] + ': ' + txt);
 }
 
+const CONF_SUB = { community_data: 'against community map data', mixed: 'some facts rest on community map data' };
+function confLabel(overall, conf) {
+  const label = { checked: 'Checked', provisional: 'Provisional', failed: 'Not valid' }[overall] || overall;
+  const sub = (overall === 'checked' && CONF_SUB[conf]) || { checked: 'all checks passed', provisional: 'some facts are unknown', failed: 'breaks a constraint' }[overall] || '';
+  return label + ' · ' + sub;
+}
+function verifyBlock(items) {
+  if (!items || !items.length) return null;
+  const fl = { opening_hours: 'opening hours', price: 'price', step_free: 'step-free access' };
+  return h('div', { class: 'verify' }, h('div', { class: 'top' }, ic('shield'), h('strong', null, 'Verify before you go')),
+    h('p', { class: 'help' }, 'These facts come from community map data. Confirm them with the venue.'),
+    h('ul', null, items.map(v => h('li', null, v.name + ': ' + (fl[v.field] || v.field) + ' ',
+      (v.url && /^https:\/\//.test(v.url)) ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer' }, 'check the source') : h('span', { class: 'help' }, '(no source link)')))));
+}
+
 function renderPlan(res, shown) {
   const p = shown.proposal;
   const cand = !!res.awaiting_decision;
@@ -722,9 +741,7 @@ function renderPlan(res, shown) {
     $('pMeta').textContent = ''; return;
   }
   $('pTitle').textContent = S.replay ? 'Your plan (replay)' : cand ? 'Proposed plan' : 'Your plan';
-  const label = { checked: 'Checked', provisional: 'Provisional', failed: 'Not valid' }[p.overall] || p.overall;
-  const sub = { checked: 'all checks passed', provisional: 'some facts are unknown', failed: 'breaks a constraint' }[p.overall] || '';
-  put('pBadges', h('span', { class: 'badge b-' + p.overall }, ic(p.overall === 'checked' ? 'check' : p.overall === 'failed' ? 'alert' : 'help'), label + ' · ' + sub),
+  put('pBadges', h('span', { class: 'badge b-' + p.overall }, ic(p.overall === 'checked' ? 'check' : p.overall === 'failed' ? 'alert' : 'help'), confLabel(p.overall, p.confidence)),
     h('span', { class: 'badge b-info' }, p.checks_passed + ' checks passed'));
   $('pExpl').textContent = p.explanation || '';
   const bits = [];
@@ -774,6 +791,7 @@ function renderPlan(res, shown) {
   if (fin) tl.append(fin);
 
   for (const i of p.issues || []) $('issues').append(h('div', { class: 'issue ' + i.status }, ic(i.status === 'fail' ? 'alert' : 'help'), h('span', null, i.message)));
+  const vb = verifyBlock(p.verify); if (vb) $('issues').append(vb);
   for (const n of p.notes || []) $('notes').append(h('div', { class: 'note' }, ic('shield'), h('span', null, n)));
   if (S.replay) { $('ctlHint').textContent = 'Editing is off in replay mode.'; }
 }
@@ -1142,18 +1160,17 @@ function planBlock(plan, st, opts) {
   }));
   const left = plan.excluded.length ? h('div', { class: 'notice warn', style: 'margin-top:12px' }, ic('help'),
     h('span', null, 'Not in this plan: ' + plan.excluded.map(x => x.name + ' (' + (QSTATUS[x.question] || 'not asked yet') + ')').join(', ') + '.')) : null;
-  const label = { checked: 'Checked', provisional: 'Provisional', failed: 'Not valid' }[plan.overall] || plan.overall;
   const decide = (opts.decide && org) ? h('div', { class: 'decide' },
     h('button', { type: 'button', disabled: plan.stale, onclick: () => decideGroup('accept') }, ic('check'), 'Accept this plan'),
     h('button', { type: 'button', class: 'ghost', onclick: () => decideGroup('reject') }, 'Discard')) : null;
   return h('div', { class: plan.stale ? 'card stale' : '', style: plan.stale ? '' : 'margin-top:12px' },
-    h('h2', null, opts.title), h('div', { class: 'badges' }, h('span', { class: 'badge b-' + plan.overall }, label + ' · ' + plan.checks_passed + ' checks passed'),
+    h('h2', null, opts.title), h('div', { class: 'badges' }, h('span', { class: 'badge b-' + plan.overall }, confLabel(plan.overall, plan.confidence) + ' · ' + plan.checks_passed + ' checks passed'),
       h('span', { class: 'badge b-info' }, ic('clock'), plan.window), plan.data.synthetic ? h('span', { class: 'badge b-demo' }, 'DEMO DATA') : null,
       plan.stale ? h('span', { class: 'badge b-provisional' }, 'Stale: inputs changed') : null),
     plan.stale ? h('div', { class: 'notice warn', style: 'margin-top:10px' }, ic('alert'), h('span', null, 'Someone changed their availability or preferences after this plan was made. ' + (org ? 'Plan again to include the latest.' : 'The organizer needs to plan again.'))) : null,
     h('p', { class: 'expl' }, plan.explanation), left, stops, h('h2', { style: 'margin-top:16px' }, 'Each person'), people,
     (plan.issues || []).length ? h('div', { class: 'issues' }, plan.issues.map(i => h('div', { class: 'issue ' + i.status }, ic(i.status === 'fail' ? 'alert' : 'help'), h('span', null, i.message)))) : null,
-    decide, h('div', { class: 'notes' }, (plan.notes || []).map(n => h('div', { class: 'note' }, ic('shield'), h('span', null, n)))));
+    verifyBlock(plan.verify), decide, h('div', { class: 'notes' }, (plan.notes || []).map(n => h('div', { class: 'note' }, ic('shield'), h('span', null, n)))));
 }
 function renderGroupPlan(st) {
   const org = st.me.role === 'organizer', run = st.run, kids = [];

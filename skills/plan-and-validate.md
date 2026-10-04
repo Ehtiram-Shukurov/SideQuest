@@ -53,3 +53,9 @@ validation and time limits.
   Validation issues about them are redacted. Never attribute a budget, access or dietary need to a
   named person, and never state amounts, in your explanation. Say "the group" instead.
 - Use `interests` to pick stops several people would enjoy, and mention which interests a stop serves.
+
+## Confidence
+- `validate_plan` returns `confidence` (`verified`, `community_data` or `mixed`) and
+  `verify_before_going`. Community map data is not verified. If confidence is `community_data` or
+  `mixed`, say so in your explanation and name the stops whose hours or prices the user should confirm.
+  Never describe community data as verified.

@@ -11,6 +11,8 @@ from .common import Cost, Frozen, IanaZone, TimeWindow, UtcDatetime
 PlanState = Literal["draft", "provisional", "ready", "accepted", "stale", "rejected", "archived"]
 CheckStatus = Literal["pass", "fail", "unknown"]
 Commitment = Literal["recommended", "reservation", "fixed"]
+Basis = Literal["verified", "community", "unknown"]  # what a fact-based verdict rests on
+Confidence = Literal["unassessed", "verified", "community_data", "mixed"]
 
 
 class Place(Frozen):
@@ -97,6 +99,17 @@ class Check(Frozen):
     block_ids: tuple[str, ...] = ()
     evidence_ids: tuple[str, ...] = ()
     data: dict[str, Any] = Field(default_factory=dict)
+    basis: Basis | None = None  # for fact-based checks: how well-sourced the fact is. Never changes `status`.
+
+
+class VerifyItem(Frozen):
+    """A fact the plan relies on that is not verified: confirm it before going."""
+
+    block_id: str
+    name: str
+    field: str  # opening_hours | price | step_free
+    source: str
+    url: str | None = None
 
 
 class CostTotal(Frozen):
@@ -110,6 +123,8 @@ class CostTotal(Frozen):
 class ValidationReport(Frozen):
     checks: tuple[Check, ...]
     per_person_totals: dict[str, CostTotal] = Field(default_factory=dict)
+    confidence: Confidence = "unassessed"  # unassessed = evidence was not supplied to the validator
+    verify: tuple[VerifyItem, ...] = ()
 
     @property
     def overall(self) -> Literal["failed", "provisional", "checked"]:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from server.models import Check, CostTotal, Place, Plan, Trip, ValidationReport
+from server.models import Check, CostTotal, Evidence, Place, Plan, Trip, ValidationReport, VerifyItem
 from server.models.plan import ActivityBlock, TravelLeg
 from server.models.trip import Member
 from server.models.weather import ForecastPeriod
@@ -27,6 +27,7 @@ def validate_plan(
     *,
     forecast: Sequence[ForecastPeriod] = (),
     base_plan: Plan | None = None,
+    evidence: Mapping[str, Evidence] | None = None,
 ) -> ValidationReport:
     checks: list[Check] = []
     members = {m.id: m for m in trip.members}
@@ -48,7 +49,83 @@ def validate_plan(
         checks.append(budget_check)
         totals[m.id] = total
     checks += _transport(plan, members)
-    return ValidationReport(checks=tuple(checks), per_person_totals=totals)
+    final = tuple(checks)
+    confidence, verify = "unassessed", ()
+    if evidence is not None:  # labelling only: statuses above are already final and are never touched
+        final = tuple(_with_basis(c, plan, places, evidence) for c in checks)
+        confidence, verify = _confidence(final), _verify_items(trip, plan, places, evidence)
+    return ValidationReport(checks=final, per_person_totals=totals, confidence=confidence, verify=verify)
+
+
+# --- evidence basis (labels what a verdict rests on; never changes a verdict) ---------------
+
+_RANK = {"unknown": 0, "community": 1, "verified": 2}
+
+
+def _basis_of(e: Evidence | None) -> str:
+    if e is None:
+        return "unknown"
+    return {"verified": "verified", "unverified": "community"}.get(e.status, "unknown")
+
+
+def _place_evidence(place: Place, evidence: Mapping[str, Evidence], field: str) -> Evidence | None:
+    for eid in place.evidence_ids:
+        e = evidence.get(eid)
+        if e is not None and e.field == field:
+            return e
+    return None
+
+
+def _with_basis(c: Check, plan: Plan, places: Mapping[str, Place], evidence: Mapping[str, Evidence]) -> Check:
+    blocks = {b.id: b for b in plan.blocks}
+    basis: str | None = None
+    if c.code in ("OPEN_HOURS", "ACCESSIBILITY") and c.block_ids:
+        b = blocks.get(c.block_ids[0])
+        p = places.get(b.place_id) if b else None
+        if p is not None:
+            basis = _basis_of(_place_evidence(p, evidence, "opening_hours" if c.code == "OPEN_HOURS" else "step_free"))
+    elif c.code == "BUDGET_PER_PERSON" and c.participant_ids:
+        mid, ranks = c.participant_ids[0], []
+        for b in plan.blocks:
+            if mid in b.attendees:
+                for cost in b.costs or ():
+                    ranks.append(0 if cost.unknown else _RANK[_basis_of(evidence.get(cost.evidence_id) if cost.evidence_id else None)])
+                if not b.costs:
+                    ranks.append(0)
+        for cost in plan.trip_costs:
+            ranks.append(0 if cost.unknown else _RANK[_basis_of(evidence.get(cost.evidence_id) if cost.evidence_id else None)])
+        if ranks:
+            basis = next(k for k, v in _RANK.items() if v == min(ranks))
+    return c.model_copy(update={"basis": basis}) if basis else c
+
+
+def _confidence(checks: Sequence[Check]) -> str:
+    passed = [c.basis for c in checks if c.status == "pass" and c.basis is not None]
+    weak = [b for b in passed if b != "verified"]  # community and unsourced facts both count as not verified
+    if not weak:
+        return "verified"
+    return "community_data" if len(weak) == len(passed) else "mixed"
+
+
+def _verify_items(trip: Trip, plan: Plan, places: Mapping[str, Place], evidence: Mapping[str, Evidence]) -> tuple[VerifyItem, ...]:
+    items: list[VerifyItem] = []
+    for b in plan.blocks:
+        p = places.get(b.place_id)
+        if p is None:
+            continue
+        wanted: list[tuple[str, Evidence | None]] = []
+        if p.opening_windows is not None:
+            wanted.append(("opening_hours", _place_evidence(p, evidence, "opening_hours")))
+        for cost in b.costs:
+            if not cost.unknown and cost.evidence_id:
+                wanted.append(("price", evidence.get(cost.evidence_id)))
+        if p.step_free is not None and any(m.requires_step_free and m.id in b.attendees for m in trip.members):
+            wanted.append(("step_free", _place_evidence(p, evidence, "step_free")))
+        for field, e in wanted:
+            if _basis_of(e) != "verified":
+                items.append(VerifyItem(block_id=b.id, name=b.name, field=field,
+                                        source=e.source if e else "unknown source", url=e.url if e else None))
+    return tuple(items)
 
 
 # --- references and coarse bounds -------------------------------------------------

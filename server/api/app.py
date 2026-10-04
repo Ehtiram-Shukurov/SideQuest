@@ -176,7 +176,7 @@ def proposal_json(prop: Proposal, ctx: ToolContext) -> dict[str, Any]:
             for eid in p.evidence_ids:
                 e = ctx.evidence.get(eid)
                 if e is not None:
-                    facts.append({"field": e.field, "status": e.status})
+                    facts.append({"field": e.field, "status": e.status, "url": e.url})
         blocks.append({
             "id": b.id, "place_id": b.place_id, "name": b.name, "start": f"{local(b.start, tz):%H:%M}",
             "end": f"{local(b.end, tz):%H:%M}", "lat": p.lat if p else None, "lon": p.lon if p else None,
@@ -195,7 +195,9 @@ def proposal_json(prop: Proposal, ctx: ToolContext) -> dict[str, Any]:
               "Hours and prices come from community map data and may be missing or out of date.",
               "A saved plan is a suggestion, not a booking."])
     return {"id": prop.id, "state": plan.state, "overall": rep.overall, "explanation": prop.explanation,
-            "blocks": blocks, "legs": legs, "issues": issues, "totals": totals,
+            "blocks": blocks, "legs": legs, "issues": issues, "totals": totals, "confidence": rep.confidence,
+            "verify": [{"block_id": v.block_id, "name": v.name, "field": v.field, "source": v.source, "url": v.url}
+                       for v in rep.verify],
             "checks_passed": sum(1 for c in rep.checks if c.status == "pass"), "notes": notes}
 
 

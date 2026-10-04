@@ -429,7 +429,7 @@ def register_groups(app: FastAPI, *, store: Store, provider_factory: Callable[[]
         excluded = [{"id": mid, "name": (store_member_name(group["id"], mid)),
                      "question": (qs.get(mid) or {}).get("status")} for mid in view.excluded]
         tz = group["tz"]
-        out = {k: base[k] for k in ("id", "state", "overall", "explanation", "blocks", "legs", "checks_passed", "notes")}
+        out = {k: base[k] for k in ("id", "state", "overall", "explanation", "blocks", "legs", "checks_passed", "notes", "confidence", "verify")}
         out.update({"issues": issues, "totals": None, "people": people, "excluded": excluded,
                     "stale": view.version != group["version"], "window": _fmt_window(
                         view.ctx.trip.window_start, view.ctx.trip.window_end, tz), "attending": viewer in names,

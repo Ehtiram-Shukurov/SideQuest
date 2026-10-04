@@ -79,6 +79,8 @@ function applyTheme(t) {
   if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
   const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   put('themeBtn', ic(dark ? 'sun' : 'moon'));
+  $('themeBtn').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+  $('themeBtn').title = dark ? 'Switch to light theme' : 'Switch to dark theme';
 }
 function initTheme() {
   let t = null; try { t = localStorage.getItem('sq-theme'); } catch (e) {}
@@ -95,17 +97,59 @@ function setLoc(title, small, cls) {
   const box = clear('loc'); box.className = 'loc ' + cls;
   box.append(h('span', { class: 'dot' }), h('div', null, h('strong', null, title), h('small', null, small)));
 }
+let locationAttempt = 0;
+function locationReady(pos, title, detail) {
+  S.pos = pos;
+  setLoc(title, detail, 'ok');
+  $('go').disabled = false;
+  $('submitNote').textContent = 'You can review and change your plan before heading out.';
+  $('locBtn').disabled = false;
+  put('locBtn', ic('pin'), 'Use my current location');
+}
 function getLocation() {
-  if (!navigator.geolocation) { setLoc('Location unavailable.', 'This browser cannot share location.', 'bad'); return; }
-  setLoc('Asking for your location…', 'Your browser will ask for permission.', '');
+  if (!navigator.geolocation) { setLoc('Location isn’t available in this browser.', 'Enter a starting point below to continue.', 'bad'); return; }
+  const attempt = ++locationAttempt;
+  const previous = S.pos;
+  $('locBtn').disabled = true;
+  put('locBtn', ic('pin'), 'Finding your location…');
+  setLoc('Waiting for location permission…', 'Allow access in your browser, or enter a starting point below.', '');
   navigator.geolocation.getCurrentPosition(p => {
-    S.pos = p.coords;
-    setLoc('Location ready.', p.coords.latitude.toFixed(4) + ', ' + p.coords.longitude.toFixed(4) + ' · accurate to ±' + Math.round(p.coords.accuracy) + ' m', 'ok');
-    $('go').disabled = false;
+    if (attempt !== locationAttempt) return;
+    locationReady(p.coords, 'Starting from your location', p.coords.latitude.toFixed(4) + ', ' + p.coords.longitude.toFixed(4) + ' · accurate to ±' + Math.round(p.coords.accuracy) + ' m');
   }, e => {
-    S.pos = null; $('go').disabled = true;
-    setLoc('Location is required to plan.', e.code === 1 ? 'Permission was denied. Allow location for this site, then try again.' : (e.message || 'Could not determine your position.'), 'bad');
+    if (attempt !== locationAttempt) return;
+    S.pos = previous;
+    $('go').disabled = !S.pos;
+    $('locBtn').disabled = false;
+    put('locBtn', ic('pin'), 'Try my location again');
+    const retained = previous ? ' Your previous starting point is still selected.' : ' Enter a starting point below to continue.';
+    setLoc(e.code === 1 ? 'Location permission was declined.' : 'We couldn’t find your location.',
+      (e.code === 1 ? 'You can allow location in your browser’s site settings.' : 'Try again when your connection improves.') + retained, 'bad');
   }, { enableHighAccuracy: true, timeout: 15000 });
+}
+function useManualStart() {
+  const latInput = $('startLat'), lonInput = $('startLon');
+  const latitude = Number(latInput.value), longitude = Number(lonInput.value);
+  const validLat = latInput.value.trim() !== '' && Number.isFinite(latitude) && Math.abs(latitude) <= 90;
+  const validLon = lonInput.value.trim() !== '' && Number.isFinite(longitude) && Math.abs(longitude) <= 180;
+  latInput.setAttribute('aria-invalid', String(!validLat)); lonInput.setAttribute('aria-invalid', String(!validLon));
+  if (!validLat || !validLon) {
+    $('startErr').textContent = 'Enter latitude from −90 to 90 and longitude from −180 to 180.';
+    show('startErr'); (!validLat ? latInput : lonInput).focus(); return;
+  }
+  ++locationAttempt; // A delayed GPS response must not replace this explicit choice.
+  hide('startErr');
+  locationReady({ latitude, longitude }, 'Starting point selected', latitude.toFixed(4) + ', ' + longitude.toFixed(4) + ' · entered by you');
+  document.querySelector('.manual-location').open = false;
+  $('req').focus();
+}
+function updateDataMode() {
+  const demo = $('data').value === 'demo';
+  $('dataSummary').textContent = demo ? 'Invented demo places' : 'Real places';
+  if (!S.replay && !G.gid && !S.view) {
+    $('modeChip').textContent = demo ? 'Demo data' : 'Live data';
+    $('modeChip').className = 'chip ' + (demo ? 'warn' : 'ok');
+  }
 }
 
 /* ---------- API helper ---------- */
@@ -140,12 +184,13 @@ async function startPlan() {
   if (!S.pos) { getLocation(); return; }
   const len = $('req').value.trim().length;
   const err = $('reqErr');
-  if (len < 3) { err.textContent = 'Describe your outing in a few words first.'; err.classList.remove('hide'); $('req').focus(); return; }
-  err.classList.add('hide'); formMsg('');
+  if (len < 3) { err.textContent = 'Describe your outing in a few words first.'; err.classList.remove('hide'); $('req').setAttribute('aria-invalid', 'true'); $('req').focus(); return; }
+  err.classList.add('hide'); $('req').removeAttribute('aria-invalid'); formMsg('');
+  if (S.mode !== 'group' && !$('nolimit').checked && !$('budget').checkValidity()) { formMsg('Enter a budget of zero or more.', 'field-err'); $('budget').focus(); return; }
   if (S.mode === 'group') { createGroup(); return; }
   $('go').disabled = true;
   S.current = null; S.view = null; S.tripId = null; stopQuest();
-  beginRun('The agent is working');
+  beginRun('Putting your outing together');
   try {
     const j = await api('/api/plans', readForm());
     S.tripId = j.trip_id; S.ownerToken = j.owner_token;
@@ -478,7 +523,7 @@ function renderMap(shown) {
       const m = L.marker([b.lat, b.lon], { icon: pinIcon(String(i + 1), catOf(b), i + 1), keyboard: false }).bindTooltip(b.name).addTo(layer);
       m.on('click', () => focusStop(i, false)); markers[i] = m;
     });
-    for (let i = 1; i < pts.length; i++) L.polyline([pts[i - 1], pts[i]], { color: '#0e7490', weight: 3, opacity: .85, className: 'route-line' }).addTo(layer);
+    for (let i = 1; i < pts.length; i++) L.polyline([pts[i - 1], pts[i]], { color: '#11675c', weight: 3, opacity: .85, className: 'route-line' }).addTo(layer);
     if (pts.length) map.fitBounds(pts, { padding: [34, 34], maxZoom: 16 });
     setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 80);
     hide('mapNote');
@@ -540,10 +585,18 @@ $('arrivedBtn').onclick = () => {
 /* ---------- tabs (mobile) ---------- */
 function setTab(t) {
   document.body.setAttribute('data-tab', t);
-  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('#tabs button').forEach(b => { b.setAttribute('aria-selected', String(b.dataset.tab === t)); b.tabIndex = b.dataset.tab === t ? 0 : -1; });
   if (t === 'map' && map) setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 60);
 }
-document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+document.querySelectorAll('#tabs button').forEach((b, index) => {
+  b.addEventListener('click', () => setTab(b.dataset.tab));
+  b.addEventListener('keydown', e => {
+    const tabs = [...document.querySelectorAll('#tabs button')];
+    const next = e.key === 'ArrowRight' ? (index + 1) % tabs.length : e.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null;
+    if (next == null) return;
+    e.preventDefault(); setTab(tabs[next].dataset.tab); tabs[next].focus();
+  });
+});
 
 /* ---------- replay (recorded run; no server, no model) ---------- */
 async function loadReplayFixture() {
@@ -607,7 +660,8 @@ function setMode(m) {
   S.mode = m;
   $('formCard').classList.toggle('group-mode', m === 'group');
   $('modeSolo').setAttribute('aria-pressed', String(m === 'solo')); $('modeGroup').setAttribute('aria-pressed', String(m === 'group'));
-  $('formTitle').textContent = m === 'group' ? 'Plan with friends' : 'Plan an outing';
+  $('formTitle').textContent = m === 'group' ? 'Bring everyone along.' : 'What’s the plan?';
+  $('formSub').textContent = m === 'group' ? 'One shared outing. Room for everyone’s preferences.' : 'A few details. An outing that feels like you.';
   $('go').textContent = m === 'group' ? 'Create group trip' : 'Plan my outing';
 }
 async function createGroup() {
@@ -683,7 +737,7 @@ function renderMembers(st) {
   put('gMembers', st.members.map(m => {
     const wins = (m.windows || []).map(w => fmtRange(w.start, w.end)).join(' · ');
     const li = h('li', { class: 'mem' },
-      h('div', { class: 'top' }, h('strong', null, m.name + (m.is_me ? ' (you)' : '')), h('span', { class: 'mini ' + (m.role === 'organizer' ? 'moved' : '') }, m.role),
+      h('div', { class: 'top' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, m.name.trim().split(/\s+/).slice(0, 2).map(n => Array.from(n)[0] || '').join('').toUpperCase()), h('strong', null, m.name + (m.is_me ? ' (you)' : '')), h('span', { class: 'mini ' + (m.role === 'organizer' ? 'moved' : '') }, m.role),
         m.submitted ? h('span', { class: 'mini ok' }, ic('check'), 'Availability shared') : h('span', { class: 'mini warn' }, 'Waiting for availability'),
         m.budget_status ? h('span', { class: 'mini ' + (m.budget_status === 'within budget' ? 'ok' : 'warn') }, m.budget_status) : null),
       wins ? h('div', { class: 'help' }, ic('clock'), ' ' + wins) : null,
@@ -699,8 +753,8 @@ function renderMembers(st) {
 /* ---- my inputs form (built once, so polling never overwrites what you are typing) ---- */
 function winRow(start, end) {
   const row = h('div', { class: 'winrow' },
-    h('div', null, h('label', { class: 'lbl', style: 'margin-top:0' }, 'From'), h('input', { type: 'datetime-local', value: start || '', 'data-k': 'start' })),
-    h('div', null, h('label', { class: 'lbl', style: 'margin-top:0' }, 'Until'), h('input', { type: 'datetime-local', value: end || '', 'data-k': 'end' })),
+    h('div', null, h('label', { class: 'lbl', style: 'margin-top:0' }, 'From'), h('input', { type: 'datetime-local', value: start || '', 'data-k': 'start', 'aria-label': 'Available from' })),
+    h('div', null, h('label', { class: 'lbl', style: 'margin-top:0' }, 'Until'), h('input', { type: 'datetime-local', value: end || '', 'data-k': 'end', 'aria-label': 'Available until' })),
     h('button', { class: 'icon', type: 'button', 'aria-label': 'Remove this time', onclick: () => row.remove() }, ic('trash')));
   return row;
 }
@@ -952,24 +1006,28 @@ async function renderGroupSave(st) {
 
 /* ---------- boot ---------- */
 function boot() {
-  put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Share my location');
+  put('themeBtn', ic('moon')); put('newBtn', ic('refresh')); put('locBtn', ic('pin'), 'Use my current location');
   put('assistIc', ic('chat')); put('chevIc', ic('chev'));
-  put('tabPlan', ic('list'), 'Plan'); put('tabMap', ic('map'), 'Map'); put('tabAssist', ic('chat'), 'Assistant');
-  const pts = [['shield', 'Every plan is checked in code, not just written by a model.'], ['pin', 'Uses your real location and real nearby places.'],
-               ['help', 'Says “unknown” when it is not sure, instead of guessing.']];
+  put('tabPlan', ic('list'), 'Plan'); put('tabMap', ic('map'), 'Map'); put('tabAssist', ic('chat'), 'Adjust');
+  const pts = [['clock', 'Built around the time you actually have.'], ['route', 'Nearby stops, with travel time included.'],
+               ['swap', 'Plans change. Your outing can, too.']];
   put('points', pts.map(([i, t]) => h('li', null, h('span', { class: 'dotic' }, ic(i)), h('span', null, t))));
   initTheme();
-  $('req').addEventListener('input', () => { $('reqCount').textContent = $('req').value.length; $('reqErr').classList.add('hide'); });
+  $('req').addEventListener('input', () => { $('reqCount').textContent = $('req').value.length; $('reqErr').classList.add('hide'); $('req').removeAttribute('aria-invalid'); });
   $('reqCount').textContent = $('req').value.length;
   $('locBtn').onclick = getLocation;
+  $('useStart').onclick = useManualStart;
+  $('data').addEventListener('change', updateDataMode);
+  $('rain').addEventListener('change', () => { $('rainSummary').textContent = $('rain').selectedOptions[0].textContent; });
+  updateDataMode();
   $('nolimit').addEventListener('change', () => { $('budget').disabled = $('nolimit').checked; });
   $('budNo').addEventListener('change', () => { $('budSel').disabled = $('budNo').checked; });
-  $('newBtn').onclick = () => { if (S.replay || G.gid) { location.href = location.pathname; return; } stopQuest(); S.current = S.view = S.tripId = null; showCompose(); $('go').disabled = !S.pos; };
+  $('newBtn').onclick = () => { if (S.replay || G.gid) { location.href = location.pathname; return; } stopQuest(); S.current = S.view = S.tripId = null; showCompose(); updateDataMode(); $('go').disabled = !S.pos; };
   $('modeSolo').onclick = () => setMode('solo'); $('modeGroup').onclick = () => setMode('group'); setMode('solo');
   const q = new URLSearchParams(location.search);
   if (!REPLAY && q.get('join')) { showJoin(q.get('join')); return; }
   if (!REPLAY && q.get('g')) { enterGroup(q.get('g')); return; }
   if (!REPLAY && q.get('share')) { showShare(q.get('share')); return; }
-  if (REPLAY) initReplay(); else { getLocation(); resumeLastTrip(); }
+  if (REPLAY) initReplay(); else { resumeLastTrip(); }
 }
 boot();

@@ -32,6 +32,10 @@ uv run uvicorn server.api.app:app --port 8000   # open http://localhost:8000
 - **Routing:** set `SIDEQUEST_ROUTING=off` to use straight-line estimates only.
 - **Database:** `data/sidequest.db` (SQLite, created on first use, git-ignored). Override with `SIDEQUEST_DB`.
 
+## Frontend development
+
+The production UI is served directly from `web/`; no Node build is needed. Optional DOM regression tests run with `npm ci && npm test` (Node 18+). See [the redesign notes](docs/FRONTEND_REDESIGN.md) for the visual system, assets, behavior changes, and remaining browser review.
+
 ## Layout
 - `server/models/` contracts; `server/planning/` scheduling, validators, overlap, export
 - `server/agent/` model adapter, agent loop, skills loader; `skills/` the seven skill files in the prompt

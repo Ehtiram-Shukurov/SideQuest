@@ -67,3 +67,26 @@ def test_overpass_query_caps_each_category_separately():
     _world(httpx.Client(transport=httpx.MockTransport(handler))).search(category="", query="", limit=5)
     q = httpx.QueryParams(seen["q"])["data"]
     assert q.count(" out center ") == 4 and "out center 60" not in q  # one capped output per category
+
+
+def test_overpass_falls_back_to_a_mirror_when_the_main_server_is_unreachable():
+    hosts = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        hosts.append(req.url.host)
+        if req.url.host == "overpass-api.de":
+            raise httpx.ConnectError("blocked")
+        return httpx.Response(200, json={"elements": [{"type": "node", "id": 7, "lat": 44.971, "lon": -93.261,
+                                                       "tags": {"amenity": "cafe", "name": "Mirror Cafe"}}]})
+
+    found = _world(httpx.Client(transport=httpx.MockTransport(handler))).search(category="food", query="", limit=5)
+    assert [p.name for p in found] == ["Mirror Cafe"] and hosts[0] == "overpass-api.de" and len(hosts) == 2
+
+
+def test_every_overpass_server_failing_is_still_a_labeled_error():
+    def handler(req: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("blocked")
+
+    with pytest.raises(ProviderError) as exc:
+        _world(httpx.Client(transport=httpx.MockTransport(handler))).search(category="", query="", limit=5)
+    assert exc.value.kind == "unavailable"

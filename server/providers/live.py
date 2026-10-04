@@ -26,6 +26,8 @@ from .base import PlaceDetails, PlaceSummary, ProviderError, category_for_words
 from .synthetic import SPEED_KMH, _haversine_m
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Public mirrors, tried in order only when the main server fails (a deployed copy could not reach the main one).
+OVERPASS_FALLBACKS = ("https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "SideQuest-MVP/0.1 (hackathon prototype)"
 DETOUR = 1.3
@@ -134,12 +136,21 @@ class LiveWorld:
             rx = "|".join(sorted(vals))
             parts.append(f'nwr(around:{self._radius},{self._lat},{self._lon})["{key}"~"^({rx})$"]["name"]->.c{i};.c{i} out center {PER_CATEGORY};')
         query = f"[out:json][timeout:25];{''.join(parts)}"
-        try:
-            resp = self._client.post(OVERPASS_URL, data={"data": query})
-        except httpx.HTTPError as exc:
-            raise ProviderError("unavailable", f"Overpass request failed: {type(exc).__name__}") from None
-        if resp.status_code in (429, 504):
-            raise ProviderError("rate_limited", f"Overpass busy ({resp.status_code}); try again shortly")
+        resp, failure, kind = None, "", "unavailable"
+        for url in (OVERPASS_URL, *OVERPASS_FALLBACKS):
+            try:
+                resp = self._client.post(url, data={"data": query})
+            except httpx.HTTPError as exc:
+                resp, failure, kind = None, f"Overpass request failed: {type(exc).__name__}", "unavailable"
+                continue
+            if resp.status_code in (429, 500, 502, 503, 504):
+                failure = f"Overpass busy ({resp.status_code}); try again shortly"
+                kind = "rate_limited" if resp.status_code in (429, 504) else "unavailable"
+                resp = None
+                continue
+            break
+        if resp is None:
+            raise ProviderError(kind, failure)
         if resp.status_code != 200:
             raise ProviderError("unavailable", f"Overpass returned {resp.status_code}")
         try:

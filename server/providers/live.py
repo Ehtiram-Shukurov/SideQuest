@@ -38,6 +38,7 @@ CATEGORIES = {
     "culture": ("tourism", {"museum", "gallery", "attraction"}),
 }
 # (typical, minimum) visit minutes by OSM value
+PER_CATEGORY = 40  # results kept per category from Overpass
 DURATIONS = {"cafe": (45, 20), "restaurant": (60, 30), "ice_cream": (20, 10), "fast_food": (30, 15),
              "park": (45, 20), "garden": (40, 15), "viewpoint": (20, 10), "museum": (90, 45),
              "gallery": (60, 30), "attraction": (45, 20)}
@@ -126,11 +127,13 @@ class LiveWorld:
     def _load(self) -> dict[str, dict]:
         if self._elements is not None:
             return self._elements
+        # One request, but a separate capped `out` per category: a single shared cap let a dense block of
+        # cafes crowd every park out of the answer (found with a real run near a university).
         parts = []
-        for key, vals in CATEGORIES.values():
+        for i, (key, vals) in enumerate(CATEGORIES.values()):
             rx = "|".join(sorted(vals))
-            parts.append(f'nwr(around:{self._radius},{self._lat},{self._lon})["{key}"~"^({rx})$"]["name"];')
-        query = f"[out:json][timeout:20];({''.join(parts)});out center 60;"
+            parts.append(f'nwr(around:{self._radius},{self._lat},{self._lon})["{key}"~"^({rx})$"]["name"]->.c{i};.c{i} out center {PER_CATEGORY};')
+        query = f"[out:json][timeout:25];{''.join(parts)}"
         try:
             resp = self._client.post(OVERPASS_URL, data={"data": query})
         except httpx.HTTPError as exc:

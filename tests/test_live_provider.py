@@ -54,3 +54,16 @@ def test_garbled_open_meteo_body_is_a_labeled_provider_error():
     with pytest.raises(ProviderError) as exc:
         w.forecast(44.97, -93.26, now, now)
     assert exc.value.kind == "unavailable"
+
+
+def test_overpass_query_caps_each_category_separately():
+    """A real run near a university got 0 parks: one shared cap let 60 cafes crowd every other category out."""
+    seen = {}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen["q"] = req.content.decode()
+        return httpx.Response(200, json={"elements": []})
+
+    _world(httpx.Client(transport=httpx.MockTransport(handler))).search(category="", query="", limit=5)
+    q = httpx.QueryParams(seen["q"])["data"]
+    assert q.count(" out center ") == 4 and "out center 60" not in q  # one capped output per category

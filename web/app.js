@@ -317,7 +317,7 @@ function factChip(f) {
   return h('span', { class: 'mini ' + (f.status === 'unknown' ? 'warn' : f.status === 'verified' ? 'ok' : '') }, names[f.field] + ': ' + txt);
 }
 
-const CONF_SUB = { community_data: 'against community map data', mixed: 'some facts rest on community map data' };
+const CONF_SUB = { community_data: 'against community map data', unverified: 'opening hours and prices are unknown', mixed: 'some facts rest on community map data' };
 function confLabel(overall, conf) {
   const label = { checked: 'Checked', provisional: 'Provisional', failed: 'Not valid' }[overall] || overall;
   const sub = (overall === 'checked' && CONF_SUB[conf]) || { checked: 'all checks passed', provisional: 'some facts are unknown', failed: 'breaks a constraint' }[overall] || '';
@@ -890,7 +890,7 @@ async function showShare(token) {
     document.title = 'SideQuest — ' + v.title;
     $('shTitle').textContent = v.title; $('shMeta').textContent = [v.date, v.window].filter(Boolean).join(' · ');
     put('shBadges', h('span', { class: 'badge b-info' }, ic('shield'), 'Read-only view'), v.synthetic ? h('span', { class: 'badge b-demo' }, 'DEMO DATA') : null,
-      h('span', { class: 'badge b-' + (v.confidence === 'verified' ? 'checked' : 'provisional') }, ({ verified: 'Facts verified', community_data: 'Based on community map data', mixed: 'Partly community map data' }[v.confidence]) || 'Checked'));
+      h('span', { class: 'badge b-' + (v.confidence === 'verified' ? 'checked' : 'provisional') }, ({ verified: 'Facts verified', community_data: 'Based on community map data', mixed: 'Partly community map data', unverified: 'Facts unknown' }[v.confidence]) || 'Checked'));
     put('shStops', v.blocks.map(b => h('div', { class: 'stopline' }, h('strong', null, b.start + '–' + b.end),
       h('div', null, h('strong', null, b.name), h('div', { class: 'chips' }, h('span', { class: 'mini' }, ic('wallet'), b.cost || ''), (b.facts || []).map(factChip).filter(Boolean))))));
     put('shVerify', verifyBlock(v.verify));

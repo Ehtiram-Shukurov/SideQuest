@@ -12,7 +12,7 @@ PlanState = Literal["draft", "provisional", "ready", "accepted", "stale", "rejec
 CheckStatus = Literal["pass", "fail", "unknown"]
 Commitment = Literal["recommended", "reservation", "fixed"]
 Basis = Literal["verified", "community", "unknown"]  # what a fact-based verdict rests on
-Confidence = Literal["unassessed", "verified", "community_data", "mixed"]
+Confidence = Literal["unassessed", "verified", "community_data", "mixed", "unverified"]
 
 
 class Place(Frozen):

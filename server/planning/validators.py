@@ -100,11 +100,15 @@ def _with_basis(c: Check, plan: Plan, places: Mapping[str, Place], evidence: Map
 
 
 def _confidence(checks: Sequence[Check]) -> str:
-    passed = [c.basis for c in checks if c.status == "pass" and c.basis is not None]
-    weak = [b for b in passed if b != "verified"]  # community and unsourced facts both count as not verified
-    if not weak:
+    # unknown checks count too: a plan whose only external facts are unknown must not read as verified
+    bases = {c.basis for c in checks if c.status in ("pass", "unknown") and c.basis is not None}
+    if not bases:
+        return "unassessed"
+    if bases == {"verified"}:
         return "verified"
-    return "community_data" if len(weak) == len(passed) else "mixed"
+    if "verified" in bases:
+        return "mixed"
+    return "community_data" if "community" in bases else "unverified"
 
 
 def _verify_items(trip: Trip, plan: Plan, places: Mapping[str, Place], evidence: Mapping[str, Evidence]) -> tuple[VerifyItem, ...]:

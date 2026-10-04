@@ -71,3 +71,12 @@ def test_api_exposes_confidence_and_source_links():
     p = j["result"]["proposal"]
     assert p["confidence"] == "verified" and p["verify"] == []  # demo data is flagged DEMO elsewhere
     assert all("url" in f for b in p["blocks"] for f in b["facts"])
+
+
+def test_a_plan_whose_facts_are_all_unknown_is_never_labelled_verified():
+    """Found by a live run: unknown hours and price left no passing check with a basis, so the plan read 'verified'."""
+    t, p, plan, evid = setup("unknown")
+    rep = validate_plan(t, plan, {"a": p}, evidence=evid)
+    assert rep.confidence != "verified"
+    assert {c.basis for c in rep.checks if c.basis} == {"unknown"}
+    assert rep.confidence == "unverified"
